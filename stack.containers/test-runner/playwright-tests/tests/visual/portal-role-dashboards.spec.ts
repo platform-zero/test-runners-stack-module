@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { authenticatedSessionState } from '../deep/shared/forward-auth';
+import { rootUrl } from '../../utils/stack-urls';
 
 type ProfileSummary = {
   profile: string;
@@ -16,9 +18,11 @@ function slug(value: string): string {
 }
 
 test.describe('portal role dashboards', () => {
+  test.use({ storageState: authenticatedSessionState });
+
   test('renders every role dashboard with integrated widgets and exports screenshots', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto('/');
+    await page.goto(rootUrl('/'));
     await expect(page.getByRole('heading', { name: 'Stack Portal' })).toBeVisible();
     const profiles = await page.evaluate(async () => {
       const response = await fetch('/api/profiles');
