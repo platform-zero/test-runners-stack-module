@@ -30,7 +30,7 @@ const allCoveredVisualHosts = new Set<string>([
 ]);
 
 const browserUiHosts = browserRouteCatalog
-  .filter((route) => route.kind !== 'non_ui' && route.kind !== 'orphaned')
+  .filter((route) => route.ownership.route && route.kind !== 'non_ui' && route.kind !== 'orphaned')
   .map((route) => route.host)
   .filter((host) => !excludedVisualCoverageHosts.has(host));
 
