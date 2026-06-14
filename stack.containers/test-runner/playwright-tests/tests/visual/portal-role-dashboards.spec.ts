@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { rootUrl } from '../../utils/stack-urls';
+import { serviceUrl } from '../../utils/stack-urls';
 
 type ProfileSummary = {
   profile: string;
@@ -19,7 +19,7 @@ function slug(value: string): string {
 test.describe('portal role dashboards', () => {
   test('renders every role dashboard with integrated widgets and exports screenshots', async ({ page, request }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-    const profiles = await request.get(rootUrl('/api/profiles')).then(async (response) => {
+    const profiles = await request.get(serviceUrl('portal', '/api/profiles')).then(async (response) => {
       expect(response.ok()).toBeTruthy();
       return await response.json() as ProfileSummary[];
     });
