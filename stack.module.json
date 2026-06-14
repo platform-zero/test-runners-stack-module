@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "test-runners",
+  "repo": "test-runners-stack-module",
+  "runtimeId": "test-runners",
+  "lifecycle": "active",
+  "dependencies": [
+    "stack-foundation"
+  ],
+  "overlays": [
+    "stack.compose/test-runners.yml",
+    "stack.config/test-runner",
+    "stack.containers/test-runner"
+  ],
+  "sourceRepo": "test-runner"
+}
