@@ -51,3 +51,4 @@ autobattler
 qbittorrent
 tas-dashboard
 tas
+tas-events
