@@ -47,3 +47,6 @@ vllm-router
 forgejo
 search
 pipeline
+autobattler
+qbittorrent
+tas-dashboard
