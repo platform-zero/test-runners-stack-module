@@ -604,6 +604,41 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'non_ui', reason: 'Mastodon native app/API endpoint, not a browser UI.' },
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
+  {
+    host: 'autobattler',
+    label: 'Autobattler',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
+    host: 'qbittorrent',
+    label: 'qBittorrent',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
+    host: 'tas-dashboard',
+    label: 'Tas Dashboard Legacy Host',
+    kind: 'non_ui',
+    anonymous: { kind: 'non_ui', reason: 'Legacy/private host retained in Caddy inventory; browser access is covered by the tas alias.' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
+    host: 'tas',
+    label: 'Tas Dashboard Alias',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
+    host: 'tas-events',
+    label: 'Tas Events',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
 ];
 
 export function routeUrl(route: BrowserRoute, overridePath?: string): string {
