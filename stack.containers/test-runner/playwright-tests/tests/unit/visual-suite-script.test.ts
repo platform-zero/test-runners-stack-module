@@ -4,7 +4,10 @@ import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '../..');
 const visualSuiteScript = path.join(repoRoot, 'scripts/run-visual-suite.sh');
 const modularSuiteScript = path.join(repoRoot, 'scripts/run-playwright-suite.sh');
-const specOwnershipPath = path.resolve(repoRoot, '../../../stack.config/test-runner/playwright-spec-ownership.json');
+const specOwnershipPaths = [
+  path.join(repoRoot, 'config/playwright-spec-ownership.json'),
+  path.resolve(repoRoot, '../../../stack.config/test-runner/playwright-spec-ownership.json'),
+];
 const stackModulePath = path.resolve(repoRoot, '../../../stack.module.json');
 
 type SpecOwnership = {
@@ -14,6 +17,10 @@ type SpecOwnership = {
 };
 
 function loadSpecOwnership(): Record<string, SpecOwnership> {
+  const specOwnershipPath = specOwnershipPaths.find((candidate) => fs.existsSync(candidate));
+  if (!specOwnershipPath) {
+    throw new Error(`missing Playwright spec ownership manifest; tried ${specOwnershipPaths.join(', ')}`);
+  }
   const manifest = JSON.parse(fs.readFileSync(specOwnershipPath, 'utf8')) as {
     specs?: Record<string, SpecOwnership>;
   };
