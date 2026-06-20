@@ -4,7 +4,10 @@ import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '../..');
 const visualSuiteScript = path.join(repoRoot, 'scripts/run-visual-suite.sh');
 const modularSuiteScript = path.join(repoRoot, 'scripts/run-playwright-suite.sh');
-const managedRunnerDockerfile = path.resolve(repoRoot, '../Dockerfile');
+const managedRunnerDockerfilePaths = [
+  path.resolve(repoRoot, '../Dockerfile'),
+  '/app/repo-fixtures/test-runner/Dockerfile',
+];
 const specOwnershipPaths = [
   path.join(repoRoot, 'config/playwright-spec-ownership.json'),
   path.resolve(repoRoot, '../../../stack.config/test-runner/playwright-spec-ownership.json'),
@@ -99,6 +102,10 @@ describe('visual suite script', () => {
   });
 
   it('keeps module-owned visual fixtures out of the central runner image', () => {
+    const managedRunnerDockerfile = managedRunnerDockerfilePaths.find((candidate) => fs.existsSync(candidate));
+    if (!managedRunnerDockerfile) {
+      throw new Error(`missing managed runner Dockerfile fixture; tried ${managedRunnerDockerfilePaths.join(', ')}`);
+    }
     const dockerfile = fs.readFileSync(managedRunnerDockerfile, 'utf8');
 
     expect(dockerfile).not.toContain('stack.config/progression');

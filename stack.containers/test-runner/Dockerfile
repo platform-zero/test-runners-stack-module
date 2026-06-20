@@ -72,6 +72,7 @@ COPY stack.containers/test-runner/fixtures/caddy-hosts.txt /app/repo-fixtures/ca
 COPY stack.containers/test-runner/fixtures/agent-build-demo /app/stack.containers/test-runner/fixtures/agent-build-demo
 COPY stack.containers/test-runner/fixtures/agent-lang /app/stack.containers/test-runner/fixtures/agent-lang
 COPY stack.containers/test-runner/fixtures/aider-runtime /app/stack.containers/test-runner/fixtures/aider-runtime
+COPY stack.containers/test-runner/Dockerfile /app/repo-fixtures/test-runner/Dockerfile
 COPY stack.containers/test-runner/container-entrypoint.sh /container-entrypoint.sh
 
 RUN chown -R pwuser:pwuser /app && \
