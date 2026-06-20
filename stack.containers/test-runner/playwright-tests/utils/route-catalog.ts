@@ -696,13 +696,31 @@ export function findRoute(host: string): BrowserRoute {
   return route;
 }
 
-function isTestdevExcluded(route: BrowserRoute): boolean {
-  return process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline';
+const optionalIsolatedDockerVmHosts = new Set(['chatgpt-connector', 'workspaces']);
+
+function selectedRouteHosts(): Set<string> | null {
+  const raw = process.env.PLAYWRIGHT_ROUTE_HOSTS || '';
+  const hosts = raw
+    .split(',')
+    .map((host) => host.trim())
+    .filter((host) => host.length > 0);
+  return hosts.length > 0 ? new Set(hosts) : null;
 }
 
-export const routeContractRoutes = browserRouteCatalog.filter((route) => route.ownership.route);
-export const smokeRoutes = browserRouteCatalog.filter((route) => route.ownership.smoke && !isTestdevExcluded(route));
-export const visualRoutes = browserRouteCatalog.filter((route) => route.ownership.visual && !isTestdevExcluded(route));
+function isRuntimeExcluded(route: BrowserRoute): boolean {
+  if (process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline') {
+    return true;
+  }
+  if (process.env.ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED !== '1' && optionalIsolatedDockerVmHosts.has(route.host)) {
+    return true;
+  }
+  const selectedHosts = selectedRouteHosts();
+  return selectedHosts !== null && !selectedHosts.has(route.host);
+}
+
+export const routeContractRoutes = browserRouteCatalog.filter((route) => route.ownership.route && !isRuntimeExcluded(route));
+export const smokeRoutes = browserRouteCatalog.filter((route) => route.ownership.smoke && !isRuntimeExcluded(route));
+export const visualRoutes = browserRouteCatalog.filter((route) => route.ownership.visual && !isRuntimeExcluded(route));
 
 export function uncataloguedHosts(): string[] {
   const cataloguedHosts = new Set(browserRouteCatalog.map((route) => route.host));
