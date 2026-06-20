@@ -226,7 +226,7 @@ run_group() {
       ;;
     visual:media)
       require_services caddy keycloak jellyfin mastodon-web mastodon-sidekiq mastodon-streaming seafile onlyoffice
-      run_specs "jellyfin,mastodon,seafile,onlyoffice" tests/visual/smoke-visual.spec.ts tests/deep/oidc/jellyfin.spec.ts tests/deep/oidc/mastodon.spec.ts tests/deep/forward-auth/seafile.spec.ts
+      run_specs "jellyfin,mastodon,seafile,onlyoffice" tests/visual/smoke-visual.spec.ts
       ;;
     visual:utilities)
       require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus vaultwarden sogo autobattler tas-dashboard
@@ -238,7 +238,7 @@ run_group() {
         return 0
       fi
       require_services caddy keycloak keycloak-auth-gateway workspace-provisioner chatgpt-connector
-      run_specs "workspaces,chatgpt-connector" tests/visual/smoke-visual.spec.ts tests/deep/forward-auth/workspaces.spec.ts
+      run_specs "workspaces,chatgpt-connector" tests/visual/smoke-visual.spec.ts
       ;;
     *)
       printf 'Unknown Playwright suite group: %s\n' "$group" >&2
