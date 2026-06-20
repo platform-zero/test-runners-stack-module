@@ -4,6 +4,7 @@ import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '../..');
 const visualSuiteScript = path.join(repoRoot, 'scripts/run-visual-suite.sh');
 const modularSuiteScript = path.join(repoRoot, 'scripts/run-playwright-suite.sh');
+const managedRunnerDockerfile = path.resolve(repoRoot, '../Dockerfile');
 const specOwnershipPaths = [
   path.join(repoRoot, 'config/playwright-spec-ownership.json'),
   path.resolve(repoRoot, '../../../stack.config/test-runner/playwright-spec-ownership.json'),
@@ -95,5 +96,12 @@ describe('visual suite script', () => {
     for (const suiteName of visualSuites) {
       expect(suiteCaseBody(script, suiteName)).not.toContain('tests/deep/');
     }
+  });
+
+  it('keeps module-owned visual fixtures out of the central runner image', () => {
+    const dockerfile = fs.readFileSync(managedRunnerDockerfile, 'utf8');
+
+    expect(dockerfile).not.toContain('stack.config/progression');
+    expect(dockerfile).not.toContain('stack.kotlin/progression');
   });
 });
