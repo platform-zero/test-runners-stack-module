@@ -4,6 +4,15 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLAYWRIGHT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 
+isolated_docker_vm_identity_configured() {
+  if [ -n "${ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED:-}" ]; then
+    [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "1" ] || [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "true" ]
+    return $?
+  fi
+
+  [ -n "${ISOLATED_DOCKER_VM_SSH_DIR:-}" ] && [ -f "${ISOLATED_DOCKER_VM_SSH_DIR}/id_ed25519" ]
+}
+
 require_container_health() {
   service_name="$1"
   project_name="${TEST_RUNNER_COMPOSE_PROJECT_NAME:-${COMPOSE_PROJECT_NAME:-webservices}}"
@@ -43,6 +52,11 @@ require_container_health() {
 
 preflight_visual_stack() {
   missing_report=""
+  isolated_vm_ready=0
+  if isolated_docker_vm_identity_configured; then
+    isolated_vm_ready=1
+  fi
+  export ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED="$isolated_vm_ready"
 
   for service_name in \
     caddy \
@@ -51,7 +65,6 @@ preflight_visual_stack() {
     alertmanager \
     portal \
     bookstack \
-    chatgpt-connector \
     sogo \
     jellyfin \
     donetick \
@@ -72,8 +85,7 @@ preflight_visual_stack() {
     seafile \
     synapse \
     element \
-    vaultwarden \
-    workspace-provisioner
+    vaultwarden
   do
     if ! status_line=$(require_container_health "$service_name"); then
       if [ -n "$missing_report" ]; then
@@ -82,6 +94,17 @@ preflight_visual_stack() {
       missing_report="${missing_report}${status_line}"
     fi
   done
+
+  if [ "$isolated_vm_ready" = "1" ]; then
+    for service_name in chatgpt-connector workspace-provisioner; do
+      if ! status_line=$(require_container_health "$service_name"); then
+        if [ -n "$missing_report" ]; then
+          missing_report="${missing_report}\n"
+        fi
+        missing_report="${missing_report}${status_line}"
+      fi
+    done
+  fi
 
   if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
     for service_name in airflow-webserver airflow-scheduler ingestion-runner; do
@@ -115,11 +138,14 @@ set -- \
   tests/deep/forward-auth/search.spec.ts \
   tests/deep/forward-auth/seafile.spec.ts \
   tests/deep/forward-auth/onboarding.spec.ts \
-  tests/deep/forward-auth/workspaces.spec.ts \
   tests/deep/oidc/element.spec.ts \
   tests/deep/oidc/mastodon.spec.ts \
   tests/deep/oidc/planka.spec.ts \
   tests/deep/oidc/vaultwarden.spec.ts
+
+if [ "${ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED:-0}" = "1" ]; then
+  set -- "$@" tests/deep/forward-auth/workspaces.spec.ts
+fi
 
 if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
   set -- "$@" tests/deep/forward-auth/pipeline.spec.ts
