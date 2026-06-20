@@ -4,6 +4,21 @@ import * as path from 'path';
 const repoRoot = path.resolve(__dirname, '../..');
 const visualSuiteScript = path.join(repoRoot, 'scripts/run-visual-suite.sh');
 const modularSuiteScript = path.join(repoRoot, 'scripts/run-playwright-suite.sh');
+const specOwnershipPath = path.resolve(repoRoot, '../../../stack.config/test-runner/playwright-spec-ownership.json');
+const stackModulePath = path.resolve(repoRoot, '../../../stack.module.json');
+
+type SpecOwnership = {
+  owner: string;
+  source: 'module' | 'test-runners';
+  reason?: string;
+};
+
+function loadSpecOwnership(): Record<string, SpecOwnership> {
+  const manifest = JSON.parse(fs.readFileSync(specOwnershipPath, 'utf8')) as {
+    specs?: Record<string, SpecOwnership>;
+  };
+  return manifest.specs ?? {};
+}
 
 function suiteSpecPaths(scriptPath: string): string[] {
   const script = fs.readFileSync(scriptPath, 'utf8');
@@ -15,6 +30,14 @@ function suiteCaseBody(script: string, suiteName: string): string {
   return match?.[1] ?? '';
 }
 
+function isStandaloneTestRunnersModule(): boolean {
+  if (!fs.existsSync(stackModulePath)) {
+    return false;
+  }
+  const manifest = JSON.parse(fs.readFileSync(stackModulePath, 'utf8')) as { id?: string };
+  return manifest.id === 'test-runners';
+}
+
 describe('visual suite script', () => {
   it('keeps the legacy visual entrypoint as a thin wrapper', () => {
     const script = fs.readFileSync(visualSuiteScript, 'utf8');
@@ -22,12 +45,34 @@ describe('visual suite script', () => {
     expect(script).toContain('visual');
   });
 
-  it('references only existing Playwright spec files from the modular registry', () => {
+  it('classifies every Playwright spec referenced by the modular registry', () => {
+    const ownership = loadSpecOwnership();
+    const unclassifiedSpecs = suiteSpecPaths(modularSuiteScript).filter((specPath) => !ownership[specPath]);
+
+    expect(unclassifiedSpecs).toEqual([]);
+  });
+
+  it('references only local or module-owned Playwright spec files from the modular registry', () => {
+    const ownership = loadSpecOwnership();
     const missingSpecs = suiteSpecPaths(modularSuiteScript).filter((specPath) => {
-      return !fs.existsSync(path.join(repoRoot, specPath));
+      return !fs.existsSync(path.join(repoRoot, specPath)) && ownership[specPath]?.source !== 'module';
     });
 
     expect(missingSpecs).toEqual([]);
+  });
+
+  it('keeps module-owned specs out of the standalone test-runners module', () => {
+    if (!isStandaloneTestRunnersModule()) {
+      return;
+    }
+
+    const ownership = loadSpecOwnership();
+    const centralizedModuleSpecs = Object.entries(ownership)
+      .filter(([, entry]) => entry.source === 'module')
+      .map(([specPath]) => specPath)
+      .filter((specPath) => fs.existsSync(path.join(repoRoot, specPath)));
+
+    expect(centralizedModuleSpecs).toEqual([]);
   });
 
   it('does not require optional VM-only services for the default visual suite unconditionally', () => {
