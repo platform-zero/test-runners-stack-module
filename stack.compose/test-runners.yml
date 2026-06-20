@@ -76,6 +76,7 @@ x-test-base: &test_runner_base
     DOCKER_HOST: tcp://docker-socket-controller-proxy:2375
     ISOLATED_DOCKER_VM_DOCKER_HOST: tcp://docker-vm-controller-proxy:2375
     DOCKER_HOST_ISOLATED: tcp://docker-vm-controller-proxy:2375
+    ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED: ${ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED:-false}
     MARIADB_HOST: mariadb
     MARIADB_PORT: 3306
     MARIADB_USER: bookstack
@@ -91,6 +92,7 @@ x-test-base: &test_runner_base
     VAULTWARDEN_ORG_IDENTIFIER: ${VAULTWARDEN_ORG_IDENTIFIER}
     AIDER_OLLAMA_API_BASE: ${AIDER_OLLAMA_API_BASE:-https://api.openai.com/v1}
     AIDER_MODEL: ${AIDER_MODEL:-gpt-4o-mini}
+    JUPYTER_NOTEBOOK_IMAGE: ${JUPYTER_NOTEBOOK_IMAGE:-platform-jupyter-notebook:5.4.3}
 
   tmpfs:
     - /tmp
