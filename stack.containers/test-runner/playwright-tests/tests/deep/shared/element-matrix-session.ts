@@ -14,6 +14,17 @@ export type MatrixSession = {
   homeserverUrl: string;
 };
 
+type MatrixLoginResponse = {
+  access_token?: string;
+  user_id?: string;
+  home_server?: string;
+  well_known?: {
+    'm.homeserver'?: {
+      base_url?: string;
+    };
+  };
+};
+
 const homeserverUrl = `https://matrix.${domain}`;
 
 async function readElementMatrixSession(page: Page): Promise<MatrixSession & { snapshot: Record<string, string> }> {
@@ -35,6 +46,35 @@ async function readElementMatrixSession(page: Page): Promise<MatrixSession & { s
 }
 
 export async function loginElementMatrixSession(page: Page): Promise<MatrixSession> {
+  let observedMatrixSession: Partial<MatrixSession> = {};
+  const matrixLoginSessionPromise = page.waitForResponse(
+    (response) => {
+      const request = response.request();
+      return request.method() === 'POST'
+        && response.ok()
+        && /\/_matrix\/client\/(?:v3|r0)\/login(?:\?|$)/.test(response.url());
+    },
+    { timeout: 180000 },
+  ).then(async (response) => {
+    const payload = await response.json().catch(() => ({})) as MatrixLoginResponse;
+    const accessToken = normalizedString(payload.access_token);
+    const userId = normalizedString(payload.user_id);
+    const responseHomeserver =
+      normalizedString(payload.well_known?.['m.homeserver']?.base_url)
+      || (normalizedString(payload.home_server) ? `https://${normalizedString(payload.home_server)}` : '')
+      || homeserverUrl;
+
+    if (accessToken) {
+      observedMatrixSession = {
+        accessToken,
+        userId,
+        homeserverUrl: responseHomeserver,
+      };
+    }
+
+    return observedMatrixSession;
+  }).catch(() => null);
+
   await testOIDCService(
     page,
     'Element (Matrix Web)',
@@ -232,7 +272,11 @@ export async function loginElementMatrixSession(page: Page): Promise<MatrixSessi
         }
 
         await expect.poll(
-          async () => normalizedString((await readElementMatrixSession(page)).accessToken),
+          async () => {
+            const localSession = await readElementMatrixSession(page);
+            return normalizedString(localSession.accessToken)
+              || normalizedString(observedMatrixSession.accessToken);
+          },
           { timeout: 90000, message: 'Element Matrix access token should be present after MAS SSO' },
         ).not.toBe('');
       },
@@ -240,9 +284,16 @@ export async function loginElementMatrixSession(page: Page): Promise<MatrixSessi
   );
 
   const session = await readElementMatrixSession(page);
-  let matrixUserId = session.userId;
-  let matrixHomeserverUrl = session.homeserverUrl;
-  const matrixAccessToken = normalizedString(session.accessToken);
+  if (!session.accessToken) {
+    await Promise.race([
+      matrixLoginSessionPromise,
+      new Promise((resolve) => setTimeout(resolve, 1000)),
+    ]);
+  }
+
+  let matrixUserId = session.userId || normalizedString(observedMatrixSession.userId);
+  let matrixHomeserverUrl = session.homeserverUrl || normalizedString(observedMatrixSession.homeserverUrl);
+  const matrixAccessToken = normalizedString(session.accessToken) || normalizedString(observedMatrixSession.accessToken);
 
   if (matrixAccessToken && (!matrixUserId || !matrixHomeserverUrl)) {
     const whoAmIResponse = await page.request.get(`${homeserverUrl}/_matrix/client/v3/account/whoami`, {
