@@ -229,8 +229,8 @@ run_group() {
       run_specs "jellyfin,mastodon,seafile,onlyoffice" tests/visual/smoke-visual.spec.ts
       ;;
     visual:utilities)
-      require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus vaultwarden sogo autobattler tas-dashboard
-      run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,vaultwarden,sogo,autobattler,tas,tas-events" tests/visual/smoke-visual.spec.ts
+      require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus qbittorrent vaultwarden sogo autobattler tas-dashboard
+      run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo,autobattler,tas,tas-events" tests/visual/smoke-visual.spec.ts
       ;;
     visual:workspaces)
       if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" != "1" ]; then
@@ -262,42 +262,60 @@ run_composed() {
   [ "$failed" -eq 0 ]
 }
 
-target="${1:-all}"
-case "$target" in
-  deep)
-    groups="deep:alertmanager deep:bookstack deep:element deep:forgejo deep:grafana deep:homeassistant deep:jellyfin deep:jupyterhub deep:keycloak deep:kopia deep:matrix deep:mastodon deep:ntfy deep:onboarding deep:planka deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
-    if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
-      groups="$groups deep:pipeline"
+run_target() {
+  local target="${1:-all}"
+  case "$target" in
+    deep)
+      groups="deep:alertmanager deep:bookstack deep:element deep:forgejo deep:grafana deep:homeassistant deep:jellyfin deep:jupyterhub deep:keycloak deep:kopia deep:matrix deep:mastodon deep:ntfy deep:onboarding deep:planka deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
+      if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
+        groups="$groups deep:pipeline"
+      fi
+      groups="$groups deep:workspaces"
+      # shellcheck disable=SC2086
+      run_composed $groups
+      ;;
+    deep:forward-auth)
+      groups="deep:alertmanager deep:grafana deep:homeassistant deep:jupyterhub deep:kopia deep:ntfy deep:onboarding deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
+      if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
+        groups="$groups deep:pipeline"
+      fi
+      groups="$groups deep:workspaces"
+      # shellcheck disable=SC2086
+      run_composed $groups
+      ;;
+    deep:oidc)
+      groups="deep:bookstack deep:element deep:forgejo deep:grafana deep:jellyfin deep:keycloak deep:matrix deep:mastodon deep:planka deep:vaultwarden deep:session"
+      # shellcheck disable=SC2086
+      run_composed $groups
+      ;;
+    visual)
+      groups="visual:coverage visual:portal visual:progression visual:apps visual:media visual:utilities visual:workspaces"
+      # shellcheck disable=SC2086
+      run_composed $groups
+      ;;
+    all)
+      groups="boundary app-smoke sso deep visual"
+      # shellcheck disable=SC2086
+      run_composed $groups
+      ;;
+    *)
+      run_group "$target"
+      ;;
+  esac
+}
+
+if [ "$#" -gt 1 ]; then
+  failed=0
+  for target in "$@"; do
+    if run_target "$target"; then
+      continue
+    else
+      rc=$?
+      failed=$((failed + 1))
+      printf '[playwright-suite] %s failed with exit %s\n' "$target" "$rc" >&2
     fi
-    groups="$groups deep:workspaces"
-    # shellcheck disable=SC2086
-    run_composed $groups
-    ;;
-  deep:forward-auth)
-    groups="deep:alertmanager deep:grafana deep:homeassistant deep:jupyterhub deep:kopia deep:ntfy deep:onboarding deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
-    if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
-      groups="$groups deep:pipeline"
-    fi
-    groups="$groups deep:workspaces"
-    # shellcheck disable=SC2086
-    run_composed $groups
-    ;;
-  deep:oidc)
-    groups="deep:bookstack deep:element deep:forgejo deep:grafana deep:jellyfin deep:keycloak deep:matrix deep:mastodon deep:planka deep:vaultwarden deep:session"
-    # shellcheck disable=SC2086
-    run_composed $groups
-    ;;
-  visual)
-    groups="visual:coverage visual:portal visual:progression visual:apps visual:media visual:utilities visual:workspaces"
-    # shellcheck disable=SC2086
-    run_composed $groups
-    ;;
-  all)
-    groups="boundary app-smoke sso deep visual"
-    # shellcheck disable=SC2086
-    run_composed $groups
-    ;;
-  *)
-    run_group "$target"
-    ;;
-esac
+  done
+  exit "$failed"
+fi
+
+run_target "${1:-all}"

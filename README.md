@@ -13,6 +13,28 @@
 ## Dependencies
 - `stack-foundation`
 
+## Runtime behavior
+
+The bundled `./run-tests.sh` command runs through the managed test-runner
+container. Even metadata-oriented commands such as `list` and `plan` may build
+the `stack/test-runner:local-build` image and start a short-lived container so
+the answer matches the materialized bundle.
+
+Test suites must continue to completion after individual failures and report
+all statuses that were reached. A failing suite should not prevent later
+independent suites from running unless the target itself is unavailable.
+
+Host artifact collection must preserve:
+
+- aggregate logs for the wrapper
+- per-suite Playwright reports
+- per-suite JSON/JUnit results
+- failure attachments such as `test-failed-*.png`, `video.webm`, traces, and
+  `error-context.md`
+
+If the top-level log reports a failure, copied JSON/JUnit artifacts must not
+silently show zero failures for the same executed subgroup.
+
 ## Validation
 
 ```sh

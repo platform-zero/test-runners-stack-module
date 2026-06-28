@@ -22,6 +22,17 @@ Automated pattern matching can give:
 
 ---
 
+## Screenshot Classes
+
+The stack now treats screenshots as two different artifacts:
+
+- **Service proof screenshots**: authenticated route captures that validate access, redirects, and page load behavior
+- **Feature proof screenshots**: contract-backed UI captures that prove a module feature, seeded workflow, or module-specific presentation state
+
+The gallery report and contract evidence report now keep those buckets separate. Do not read a feature proof screenshot as a route-health signal.
+
+---
+
 ## How to Review Screenshots
 
 ### 1. After Test Run, Copy Screenshots
@@ -39,17 +50,25 @@ docker cp $(docker compose ps -q test-playwright-e2e):/app/test-results/screensh
 **Location:** `test-results/screenshots/*.jpg`
 
 **What to Verify:**
-- ✅ Service-specific UI visible (not generic error page)
+- ✅ Service-specific UI visible for service proofs
 - ✅ Correct branding/logo for the service
 - ✅ User is authenticated (username/logout visible if applicable)
 - ✅ No error messages or warning banners
 - ✅ Page fully loaded (not blank or stuck loading)
 
 **Example Good Screenshots:**
-- Stack Portal: Shows contract-backed service cards/dashboard
+- Stack Portal: Shows authenticated portal dashboard
 - Ntfy: Shows "All notifications" sidebar
-- Forgejo: Shows "Beyond coding. We forge." landing page
+- Forgejo: Shows repository dashboard or account settings
 - Prometheus: Shows query interface with "Execute" button
+
+For feature proofs, verify the module-specific state instead:
+
+- Autobattler: seeded board or team builder state
+- Mastodon: rendered media, preview card, or avatar state
+- Seafile: OnlyOffice document rendering
+- Portal: role dashboard proofs
+- Progression: proof panels and ops cockpit views
 
 **Example Bad Screenshots (Even if Test Passed):**
 - JupyterHub: Shows "Spawn failed" error (auth worked, spawner broken)
@@ -88,7 +107,9 @@ npm run screenshot-report
 
 This creates: `test-results/screenshot-report.html`
 
-Open in browser to see gallery view of all screenshots with metadata.
+Open in browser to see service proofs, feature proofs, and the declared contract evidence targets side by side.
+
+The gallery uses `build/reports/evidence-coverage.json` when that contract report is available.
 
 ---
 
@@ -96,6 +117,7 @@ Open in browser to see gallery view of all screenshots with metadata.
 
 ### For Each Screenshot, Verify:
 
+- [ ] **Correct Class:** Service proof or feature proof, as expected
 - [ ] **Correct Service:** Logo/branding matches expected service
 - [ ] **Authentication Status:** User appears logged in (if applicable)
 - [ ] **No Errors:** No error messages, warnings, or exception text

@@ -432,6 +432,12 @@ export async function captureVisualSnapshot(
 
   await assertSmokeContract(page, { ...route, smoke: effectiveSmoke }, user);
 
+  if (typeof visual.prepare === 'function') {
+    await visual.prepare(page);
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await page.waitForTimeout(500);
+  }
+
   const screenshotDir = path.join(screenshotRoot, 'visual');
   fs.mkdirSync(screenshotDir, { recursive: true });
   const screenshotPath = path.join(screenshotDir, `${visual.fileStem}.jpeg`);

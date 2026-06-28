@@ -42,6 +42,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+source_unit_available() {
+    [ -x "$PROJECT_ROOT/gradlew" ] || return 1
+    git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
 default_runtime_env_file() {
     local dist_parent=""
     dist_parent="$(dirname "$DIST_DIR")"
@@ -526,7 +531,7 @@ run_all_tests() {
     summary_file="$results_root/all-summary.txt"
     : > "$summary_file"
 
-    if [ -x "$PROJECT_ROOT/gradlew" ]; then
+    if source_unit_available; then
         step_commands=("source-unit|source-unit" "${step_commands[@]}")
     fi
 
@@ -570,7 +575,7 @@ run_all_tests() {
 }
 
 run_source_unit_tests() {
-    if [ ! -x "$PROJECT_ROOT/gradlew" ]; then
+    if ! source_unit_available; then
         echo -e "${RED}Error:${NC} source-unit requires a source checkout with ./gradlew at $PROJECT_ROOT" >&2
         return 1
     fi
@@ -621,7 +626,7 @@ run_kotlin_metadata() {
             ;;
     esac
 
-    if [ -x "$PROJECT_ROOT/gradlew" ]; then
+    if source_unit_available; then
         (cd "$PROJECT_ROOT" && ./gradlew :test-runner:run --args="--suite $suite $runner_flag --env localhost" --no-daemon)
     else
         run_runner "suite-$mode" "$suite"
@@ -634,14 +639,14 @@ print_test_plan() {
         all)
             cat <<'EOF_PLAN'
 Plan: all
-Includes every registered test/check exposed by run-tests.sh:
+Includes every deployment-safe test/check exposed by run-tests.sh:
 EOF_PLAN
             local index=1
-            if [ -x "$PROJECT_ROOT/gradlew" ]; then
+            if source_unit_available; then
                 echo "  $index. source-unit"
                 index=$((index + 1))
             fi
-            for item in kt-full kt-recovery kt-agent-env kt-agent-expand kt-agent-fixtures kt-agent-runtime kt-agent-lab kt-agent-security kt-agent-capability kt-agent-advisory ts-unit ts-e2e-all; do
+            for item in kt-full kt-agent-env kt-agent-expand kt-agent-fixtures kt-agent-runtime kt-agent-lab kt-agent-security kt-agent-capability kt-agent-advisory ts-unit ts-e2e-all; do
                 echo "  $index. $item"
                 index=$((index + 1))
             done
@@ -649,7 +654,7 @@ EOF_PLAN
         default)
             echo "Plan: default"
             local index=1
-            if [ -x "$PROJECT_ROOT/gradlew" ]; then
+            if source_unit_available; then
                 echo "  $index. source-unit"
                 index=$((index + 1))
             fi
@@ -702,16 +707,30 @@ run_registry_target() {
     case "$target" in
         all) run_all_tests ;;
         default)
-            if [ -x "$PROJECT_ROOT/gradlew" ]; then
-                run_source_unit_tests || return $?
+            local failed=0 step command_status
+            if source_unit_available; then
+                if ! run_source_unit_tests; then
+                    failed=$((failed + 1))
+                fi
             fi
-            run_runner suite stack-contract &&
-            run_runner suite agent-security &&
-            run_runner suite agent-capability &&
-            run_runner ts-unit &&
-            run_runner ts-boundary &&
-            run_runner ts-app-smoke &&
-            run_runner ts-sso
+            for step in \
+                "suite stack-contract" \
+                "suite agent-security" \
+                "suite agent-capability" \
+                "ts-unit" \
+                "ts-boundary" \
+                "ts-app-smoke" \
+                "ts-sso"; do
+                read -r -a step_args <<< "$step"
+                if run_runner "${step_args[@]}"; then
+                    command_status=0
+                else
+                    command_status=$?
+                    failed=$((failed + 1))
+                    echo -e "${RED}FAIL${NC} $step (exit $command_status)"
+                fi
+            done
+            [ "$failed" -eq 0 ]
             ;;
         source-unit) run_source_unit_tests ;;
         kt-core) run_runner suite stack-core ;;

@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Page } from '@playwright/test';
 import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
 
 export type RouteKind = 'public' | 'forward_auth' | 'oidc_login' | 'non_ui' | 'orphaned';
@@ -28,6 +29,7 @@ export type VisualContract = SmokeContract & {
   fileStem: string;
   fullPage?: boolean;
   quality?: number;
+  prepare?: (page: Page) => Promise<void>;
 };
 
 export type BrowserRoute = {
@@ -102,15 +104,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
     smoke: {
-      matcher: /Finish account setup in Keycloak|Open Keycloak Account Console|Enroll OTP\/MFA/i,
-      selector: 'text=/Finish account setup in Keycloak|Open Keycloak Account Console|Enroll OTP\\/MFA/i',
+      matcher: /Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i,
+      selector: 'text=/Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i',
       disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
     },
     visual: {
       fileStem: 'onboarding-authenticated',
-      matcher: /Finish account setup in Keycloak|Open Keycloak Account Console|Enroll OTP\/MFA/i,
-      selector: 'text=/Finish account setup in Keycloak|Open Keycloak Account Console|Enroll OTP\\/MFA/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
+      matcher: /Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i,
+      selector: 'text=/Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i',
+      disallowMatcher: /\bSign in to your account\b|\bNo onboarding marker is present\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },
     ownership: { route: true, smoke: true, visual: true, deep: true },
@@ -201,11 +203,11 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'service_login', matcher: /\bJellyfin\b|\bKeycloak\b|\bSign In\b|\bLogin\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
     visual: {
       fileStem: 'jellyfin-authenticated',
-      matcher: /\bJellyfin\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b|\bNothing here\b|create a library/i,
-      selector: 'text=/Jellyfin|Dashboard|Home|Favorites|Libraries|Nothing here|create a library/i',
+      matcher: /\bJellyfin\b|\bStack Media\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b/i,
+      selector: 'text=/Jellyfin|Stack Media|Dashboard|Home|Favorites|Libraries/i',
       loginLabel: 'Keycloak',
       oidcStartPath: '/sso/OID/start/keycloak',
-      disallowMatcher: /\bWelcome to Jellyfin\b|\bset up your server\b|\bPlease select your preferred language\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bWelcome to Jellyfin\b|\bset up your server\b|\bPlease select your preferred language\b|\bNothing here\b|create a library|\b503 Service Unavailable\b/i,
     },
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
@@ -237,10 +239,11 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'service_login', matcher: /\bERPNext\b|\bFrappe\b|\bKeycloak\b|\bLogin\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
     visual: {
       fileStem: 'erpnext-authenticated',
-      matcher: /\bERPNext\b|\bFrappe\b|\bDesk\b|\bHome\b|\bModules\b|\bSettings\b|Alice Morgan/i,
-      selector: 'text=/ERPNext|Frappe|Desk|Home|Modules|Settings|Alice Morgan/i',
+      path: '/app',
+      matcher: /\bERPNext\b|\bFrappe\b|\bDesk\b|\bFramework\b|\bSearch\b|\bWorkspaces\b|\bAccounting\b|\bSelling\b|\bBuying\b|\bStock\b|\bProjects\b/i,
+      selector: 'text=/ERPNext|Frappe|Desk|Framework|Search|Workspaces|Accounting|Selling|Buying|Stock|Projects/i',
       loginLabel: 'Keycloak',
-      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\bEdit Profile\b|\bReset Password\b|\bManage 3rd party apps\b|\bPublic Profile\b|\bUser visibility\b|\b503 Service Unavailable\b/i,
     },
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
@@ -373,6 +376,16 @@ export const browserRouteCatalog: BrowserRoute[] = [
       matcher: /Sovereign Compute Progression|Ownership Path|Next Action/i,
       selector: 'text=/Sovereign Compute Progression|Ownership Path|Next Action/i',
       disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
+      prepare: async (page) => {
+        await page.evaluate(async () => {
+          const response = await fetch('/api/scan', { method: 'POST' });
+          if (!response.ok) {
+            throw new Error(`progression scan returned HTTP ${response.status}`);
+          }
+        });
+        await page.reload({ waitUntil: 'networkidle' });
+        await page.getByText(/Proven|Current slice complete|BookStack route and central-login access evidence passed/i).first().waitFor({ timeout: 15000 });
+      },
       quality: 85,
     },
     ownership: { route: true, smoke: true, visual: true, deep: false },
@@ -502,6 +515,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'pipeline-monitor-authenticated',
       matcher: /\bAirflow\b|\bDAGs\b|\bPipeline Readiness\b|\bSources\b|\bStatus\b|\bData Pipeline\b/i,
       selector: 'text=/Airflow|DAGs|Pipeline Readiness|Sources|Status|Data Pipeline/i',
+      disallowMatcher: /\bLog In\b|\bSign in to your account\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },
     ownership: { route: true, smoke: true, visual: true, deep: true },
@@ -660,8 +674,16 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     visual: {
       fileStem: 'tas-events-authenticated',
-      matcher: /Tasmania|Events|Hobart|Source|Open|Saved|Timeline|Live Digest/i,
-      selector: 'text=/Tasmania|Events|Hobart|Source|Open|Saved|Timeline|Live Digest/i',
+      prepare: async (page) => {
+        const timelineTab = page.getByRole('button', { name: /timeline/i }).first();
+        if (await timelineTab.isVisible().catch(() => false)) {
+          await timelineTab.click({ force: true }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+          await page.waitForTimeout(750);
+        }
+      },
+      matcher: /Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i,
+      selector: 'text=/Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i',
       disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },

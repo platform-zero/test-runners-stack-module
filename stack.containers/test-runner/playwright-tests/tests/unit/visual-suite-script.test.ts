@@ -101,6 +101,12 @@ describe('visual suite script', () => {
     }
   });
 
+  it('keeps qBittorrent in the visual utilities suite', () => {
+    const script = fs.readFileSync(modularSuiteScript, 'utf8');
+    expect(script).toContain('visual:utilities)');
+    expect(script).toContain('qbittorrent');
+  });
+
   it('keeps module-owned visual fixtures out of the central runner image', () => {
     const managedRunnerDockerfile = managedRunnerDockerfilePaths.find((candidate) => fs.existsSync(candidate));
     if (!managedRunnerDockerfile) {
