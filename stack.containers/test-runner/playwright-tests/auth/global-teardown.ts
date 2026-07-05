@@ -6,7 +6,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveExistingAuthArtifact } from '../utils/auth-artifacts';
+import {
+  loadManagedTestUserRegistry,
+  resolveExistingAuthArtifact,
+  unregisterManagedTestUser,
+} from '../utils/auth-artifacts';
 import { removeJupyterContainersForUsers } from '../utils/jupyterhub-cleanup';
 import { KeycloakClient } from '../utils/keycloak-client';
 
@@ -48,7 +52,17 @@ async function keycloakGlobalTeardown() {
     const keycloakClient = KeycloakClient.fromEnvironment();
     if (username) {
       await keycloakClient.deleteUser(username);
+      unregisterManagedTestUser(username);
       console.log('\n✅ Keycloak user cleaned up successfully\n');
+    }
+
+    const registryUsers = loadManagedTestUserRegistry();
+    for (const registryUser of registryUsers) {
+      if (registryUser === username) {
+        continue;
+      }
+      await keycloakClient.deleteUser(registryUser).catch(() => {});
+      unregisterManagedTestUser(registryUser);
     }
 
     const stackAdminUser = optionalEnv('STACK_ADMIN_USER');

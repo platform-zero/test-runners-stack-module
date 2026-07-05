@@ -60,7 +60,7 @@ test.describe('Caddy UI Visual Coverage', () => {
         page,
         'Apex Portal',
         rootUrl('/'),
-        /(Stack Portal|contract-backed modules|SOGo)/i,
+        /(Datamancy|Keycloak|Grafana|BookStack)/i,
         {
           screenshotSuffix: 'authenticated',
           screenshotFullPage: true,

@@ -39,9 +39,9 @@ test.use({ storageState: authenticatedSessionState });
         options: { skipScreenshot: true },
       },
       {
-        name: 'Stack Portal',
+        name: 'Homepage Dashboard',
         path: serviceUrl('portal'),
-        pattern: /Stack Portal|contract-backed modules|SOGo/i,
+        pattern: /Datamancy|Keycloak|Grafana|BookStack/i,
         options: { skipScreenshot: true },
       },
     ];

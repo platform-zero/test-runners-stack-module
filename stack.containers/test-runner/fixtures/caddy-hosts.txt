@@ -43,7 +43,6 @@ api.homeassistant
 ntfy
 clickhouse
 models
-vllm-router
 forgejo
 search
 pipeline

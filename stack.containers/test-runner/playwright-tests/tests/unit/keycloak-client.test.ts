@@ -1,4 +1,5 @@
 import { KeycloakClient } from '../../utils/keycloak-client';
+import * as authArtifacts from '../../utils/auth-artifacts';
 
 describe('KeycloakClient', () => {
   const originalEnv = process.env;
@@ -39,6 +40,7 @@ describe('KeycloakClient', () => {
   });
 
   it('creates a managed user through the Keycloak Admin API', async () => {
+    const registerSpy = jest.spyOn(authArtifacts, 'registerManagedTestUser').mockReturnValue(['playwright-demo']);
     const client = new KeycloakClient({
       baseUrl: 'http://keycloak:8080',
       realm: 'webservices',
@@ -58,6 +60,7 @@ describe('KeycloakClient', () => {
     const user = await client.createManagedUser(KeycloakClient.buildManagedUser('playwright-demo'));
 
     expect(user.keycloakUserId).toBe('user-id');
+    expect(registerSpy).toHaveBeenCalledWith('playwright-demo');
     expect(fetchMock).toHaveBeenCalledWith(
       'http://keycloak:8080/admin/realms/webservices/users',
       expect.objectContaining({
@@ -68,6 +71,8 @@ describe('KeycloakClient', () => {
   });
 
   it('only cleans up managed playwright users', async () => {
+    jest.spyOn(authArtifacts, 'loadManagedTestUserRegistry').mockReturnValue(['ofexample1', 'obexample2']);
+    jest.spyOn(authArtifacts, 'unregisterManagedTestUser').mockReturnValue([]);
     const client = new KeycloakClient({
       baseUrl: 'http://keycloak:8080',
       realm: 'webservices',
@@ -77,21 +82,28 @@ describe('KeycloakClient', () => {
     fetchMock
       .mockResolvedValueOnce(okJson({ access_token: 'token' }))
       .mockResolvedValueOnce(okJson([
-        { id: 'managed-id', username: 'plmosm1qtdabc1', attributes: { managedBy: ['webservices-playwright'] } },
+        { id: 'managed-id', username: 'plmosm1qtdabc1', attributes: { managed: ['true'], managedBy: ['webservices-playwright'] } },
         { id: 'real-id', username: 'gerald', attributes: { managedBy: ['webservices-playwright'] } },
         { id: 'foreign-id', username: 'playwright-foreign', attributes: { managedBy: ['other'] } },
       ]))
       .mockResolvedValueOnce(okJson([
-        { id: 'legacy-id', username: 'playwright-legacy', attributes: { managedBy: ['webservices-playwright'] } },
+        { id: 'legacy-id', username: 'playwright-legacy', attributes: { managed: ['true'], managedBy: ['webservices-playwright'] } },
+      ]))
+      .mockResolvedValueOnce(okJson([
+        { id: 'onboard-id', username: 'ofexample1', attributes: { managed: ['true'], managedBy: ['webservices-playwright'] } },
+      ]))
+      .mockResolvedValueOnce(okJson([
+        { id: 'portal-id', username: 'obexample2', attributes: { managed: ['true'], managedBy: ['webservices-playwright'] } },
       ]))
       .mockResolvedValueOnce(okJson([]))
       .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' })
-      .mockResolvedValueOnce(okJson([]))
+      .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' })
+      .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' })
       .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' });
 
     const removed = await client.cleanupManagedTestUsers();
 
-    expect(removed).toEqual(['plmosm1qtdabc1', 'playwright-legacy']);
+    expect(removed).toEqual(['plmosm1qtdabc1', 'playwright-legacy', 'ofexample1', 'obexample2']);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://keycloak:8080/admin/realms/webservices/users/managed-id',
       expect.objectContaining({ method: 'DELETE' }),
@@ -100,6 +112,34 @@ describe('KeycloakClient', () => {
       'http://keycloak:8080/admin/realms/webservices/users/legacy-id',
       expect.objectContaining({ method: 'DELETE' }),
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://keycloak:8080/admin/realms/webservices/users/onboard-id',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://keycloak:8080/admin/realms/webservices/users/portal-id',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
+
+  it('unregisters managed usernames when deleting a Keycloak user', async () => {
+    const unregisterSpy = jest.spyOn(authArtifacts, 'unregisterManagedTestUser').mockReturnValue([]);
+    const client = new KeycloakClient({
+      baseUrl: 'http://keycloak:8080',
+      realm: 'webservices',
+      adminUsername: 'admin',
+      adminPassword: 'secret',
+    });
+    fetchMock
+      .mockResolvedValueOnce(okJson({ access_token: 'token' }))
+      .mockResolvedValueOnce(okJson([
+        { id: 'managed-id', username: 'playwright-delete-me', email: 'playwright-delete-me@example.test', attributes: {} },
+      ]))
+      .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' });
+
+    await client.deleteUser('playwright-delete-me');
+
+    expect(unregisterSpy).toHaveBeenCalledWith('playwright-delete-me');
   });
 
   it('generates Planka-compatible managed usernames', () => {

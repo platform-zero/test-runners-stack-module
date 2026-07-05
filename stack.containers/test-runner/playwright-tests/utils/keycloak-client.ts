@@ -1,4 +1,9 @@
 import type { TestUser } from './test-user';
+import {
+  loadManagedTestUserRegistry,
+  registerManagedTestUser,
+  unregisterManagedTestUser,
+} from './auth-artifacts';
 import { stackDomain } from './stack-urls';
 
 export type KeycloakUserProfile = {
@@ -152,6 +157,8 @@ export class KeycloakClient {
       throw new Error(`Keycloak user create did not return a user id for ${user.username}.`);
     }
 
+    registerManagedTestUser(user.username);
+
     return { ...user, keycloakUserId };
   }
 
@@ -180,9 +187,10 @@ export class KeycloakClient {
 
   async cleanupManagedTestUsers(preservedUsers: string[] = []): Promise<string[]> {
     const token = await this.adminToken();
-    const preserved = new Set(preservedUsers);
+    const preserved = new Set(preservedUsers.map((username) => username.trim().toLowerCase()).filter((username) => username.length > 0));
     const usersById = new Map<string, KeycloakUserRepresentation>();
-    for (const search of ['pl', 'playwright-']) {
+    const searches = new Set(['pl', 'playwright-', ...loadManagedTestUserRegistry()]);
+    for (const search of searches) {
       const response = await fetch(`${this.baseUrl}/admin/realms/${encodeURIComponent(this.realm)}/users?search=${encodeURIComponent(search)}&max=100`, {
         headers: this.authHeaders(token),
       });
@@ -200,12 +208,12 @@ export class KeycloakClient {
 
     for (const user of usersById.values()) {
       const username = user.username || '';
+      const managed = attributeValue(user.attributes?.managed);
       const managedBy = attributeValue(user.attributes?.managedBy);
-      const managedUsername = username.startsWith('pl') || username.startsWith('playwright-');
-      if (!user.id || !managedUsername || preserved.has(username) || managedBy !== 'webservices-playwright') {
+      if (!user.id || preserved.has(username.toLowerCase()) || managed !== 'true' || managedBy !== 'webservices-playwright') {
         continue;
       }
-      await this.deleteUser(user.id);
+      await this.deleteUserById(user.id, username);
       removed.push(username);
     }
 
@@ -220,11 +228,29 @@ export class KeycloakClient {
       headers: this.authHeaders(token),
     });
     if (response.status === 404) {
+      unregisterManagedTestUser(userIdOrUsername);
       return;
     }
     if (!response.ok && response.status !== 204) {
       throw new Error(`Keycloak user delete failed for ${userIdOrUsername}: HTTP ${response.status} ${await response.text()}`);
     }
+    unregisterManagedTestUser(userIdOrUsername);
+  }
+
+  private async deleteUserById(userId: string, usernameForRegistry?: string): Promise<void> {
+    const token = await this.adminToken();
+    const response = await fetch(`${this.baseUrl}/admin/realms/${encodeURIComponent(this.realm)}/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      headers: this.authHeaders(token),
+    });
+    if (response.status === 404) {
+      unregisterManagedTestUser(usernameForRegistry || userId);
+      return;
+    }
+    if (!response.ok && response.status !== 204) {
+      throw new Error(`Keycloak user delete failed for ${usernameForRegistry || userId}: HTTP ${response.status} ${await response.text()}`);
+    }
+    unregisterManagedTestUser(usernameForRegistry || userId);
   }
 
   private async findUserByUsername(username: string): Promise<KeycloakUserRepresentation | null> {

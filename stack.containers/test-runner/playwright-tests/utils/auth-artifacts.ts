@@ -12,6 +12,8 @@ export type StackAdminCredentials = {
   email: string;
 };
 
+const MANAGED_USER_REGISTRY = 'managed-test-users.json';
+
 function normalizedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -69,6 +71,53 @@ export function writeJsonAuthArtifact(fileName: string, value: unknown): string 
   const outputPath = path.join(ensureAuthDir(), fileName);
   fs.writeFileSync(outputPath, JSON.stringify(value, null, 2));
   return outputPath;
+}
+
+function normalizeUsernames(usernames: Iterable<string>): string[] {
+  return [...new Set(
+    [...usernames]
+      .map((username) => normalizedString(username).toLowerCase())
+      .filter((username) => username.length > 0)
+  )].sort();
+}
+
+export function loadManagedTestUserRegistry(): string[] {
+  const registryPath = resolveExistingAuthArtifact(MANAGED_USER_REGISTRY);
+  if (!registryPath) {
+    return [];
+  }
+
+  try {
+    const value = JSON.parse(fs.readFileSync(registryPath, 'utf-8')) as unknown;
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return normalizeUsernames(value.filter((entry): entry is string => typeof entry === 'string'));
+  } catch {
+    return [];
+  }
+}
+
+export function writeManagedTestUserRegistry(usernames: Iterable<string>): string {
+  return writeJsonAuthArtifact(MANAGED_USER_REGISTRY, normalizeUsernames(usernames));
+}
+
+export function registerManagedTestUser(username: string): string[] {
+  const usernames = loadManagedTestUserRegistry();
+  usernames.push(username);
+  writeManagedTestUserRegistry(usernames);
+  return loadManagedTestUserRegistry();
+}
+
+export function unregisterManagedTestUser(username: string): string[] {
+  const normalized = normalizedString(username).toLowerCase();
+  if (!normalized) {
+    return loadManagedTestUserRegistry();
+  }
+
+  const remaining = loadManagedTestUserRegistry().filter((entry) => entry !== normalized);
+  writeManagedTestUserRegistry(remaining);
+  return remaining;
 }
 
 function readJsonArtifact<T>(fileName: string): T {

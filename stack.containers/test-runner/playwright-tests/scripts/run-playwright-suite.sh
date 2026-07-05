@@ -23,6 +23,10 @@ detect_optional_capabilities() {
   fi
 }
 
+isolated_docker_vm_socket_skip_reason() {
+  printf '%s' 'isolated Docker VM socket is not configured'
+}
+
 container_name_for_service() {
   local service_name="$1"
   docker ps \
@@ -103,6 +107,8 @@ run_group() {
       if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "1" ]; then
         require_services workspace-provisioner
         PW_SKIP_GLOBAL_SETUP=1 run_specs "workspaces" tests/fast/workspaces-boundary.spec.ts
+      else
+        printf 'Skipping boundary:workspaces: %s.\n' "$(isolated_docker_vm_socket_skip_reason)"
       fi
       ;;
     app-smoke)
@@ -199,7 +205,7 @@ run_group() {
       ;;
     deep:workspaces)
       if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" != "1" ]; then
-        printf 'Skipping %s: isolated Docker VM SSH identity is not configured.\n' "$group"
+        printf 'Skipping %s: %s.\n' "$group" "$(isolated_docker_vm_socket_skip_reason)"
         return 0
       fi
       require_services caddy keycloak keycloak-auth-gateway workspace-provisioner
@@ -234,7 +240,7 @@ run_group() {
       ;;
     visual:workspaces)
       if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" != "1" ]; then
-        printf 'Skipping %s: isolated Docker VM SSH identity is not configured.\n' "$group"
+        printf 'Skipping %s: %s.\n' "$group" "$(isolated_docker_vm_socket_skip_reason)"
         return 0
       fi
       require_services caddy keycloak keycloak-auth-gateway workspace-provisioner chatgpt-connector
