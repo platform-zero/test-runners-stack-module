@@ -109,14 +109,6 @@ print_usage() {
     echo "  kt-live-ingestion Run live ingestion, search corpus, and publication checks"
     echo "  kt-recovery       Run disposable testdev recovery drills"
     echo "  kt-full           Run the full stack suite including live ingestion"
-    echo "  kt-agent-env      Run base agent workspace toolchain checks"
-    echo "  kt-agent-expand   Run optional profile installation checks"
-    echo "  kt-agent-fixtures Run deterministic polyglot build fixtures"
-    echo "  kt-agent-runtime  Run Aider runtime checks"
-    echo "  kt-agent-lab      Run retired agent lab checks"
-    echo "  kt-agent-security Run deterministic agent security boundary tests"
-    echo "  kt-agent-capability Run deterministic agent capability contract tests"
-    echo "  kt-agent-advisory Run advisory agent reliability and LLM drift tests"
     echo -e "${GREEN}TypeScript / Playwright:${NC}"
     echo "  ts                Run all TypeScript tests"
     echo "  ts-unit           Run Jest unit tests"
@@ -514,14 +506,6 @@ run_all_tests() {
     local summary_file results_root
     local -a step_commands=(
         "kt-full|suite stack-full"
-        "kt-agent-env|suite agent-env"
-        "kt-agent-expand|suite agent-expand"
-        "kt-agent-fixtures|suite agent-fixtures"
-        "kt-agent-runtime|suite agent-runtime"
-        "kt-agent-lab|suite agent-lab"
-        "kt-agent-security|suite agent-security"
-        "kt-agent-capability|suite agent-capability"
-        "kt-agent-advisory|suite agent-advisory"
         "ts-unit|ts-unit"
         "ts-e2e-all|ts-e2e-all"
     )
@@ -646,7 +630,7 @@ EOF_PLAN
                 echo "  $index. source-unit"
                 index=$((index + 1))
             fi
-            for item in kt-full kt-agent-env kt-agent-expand kt-agent-fixtures kt-agent-runtime kt-agent-lab kt-agent-security kt-agent-capability kt-agent-advisory ts-unit ts-e2e-all; do
+            for item in kt-full ts-unit ts-e2e-all; do
                 echo "  $index. $item"
                 index=$((index + 1))
             done
@@ -660,15 +644,13 @@ EOF_PLAN
             fi
             cat <<EOF_PLAN
   $index. kt-contract
-  $((index + 1)). kt-agent-security
-  $((index + 2)). kt-agent-capability
-  $((index + 3)). ts-unit
-  $((index + 4)). ts-boundary
-  $((index + 5)). ts-app-smoke
-  $((index + 6)). ts-sso
+  $((index + 1)). ts-unit
+  $((index + 2)). ts-boundary
+  $((index + 3)). ts-app-smoke
+  $((index + 4)). ts-sso
 EOF_PLAN
             ;;
-        kt-*|stack-*|agent-*)
+        kt-*|stack-*)
             echo "Plan: $target"
             case "$target" in
                 kt-core) echo "  1. suite stack-core" ;;
@@ -678,14 +660,6 @@ EOF_PLAN
                 kt-live-ingestion) echo "  1. suite stack-live-ingestion" ;;
                 kt-recovery) echo "  1. suite stack-recovery" ;;
                 kt-full) echo "  1. suite stack-full" ;;
-                kt-agent-env) echo "  1. suite agent-env" ;;
-                kt-agent-expand) echo "  1. suite agent-expand" ;;
-                kt-agent-fixtures) echo "  1. suite agent-fixtures" ;;
-                kt-agent-runtime) echo "  1. suite agent-runtime" ;;
-                kt-agent-lab) echo "  1. suite agent-lab" ;;
-                kt-agent-security) echo "  1. suite agent-security" ;;
-                kt-agent-capability) echo "  1. suite agent-capability" ;;
-                kt-agent-advisory) echo "  1. suite agent-advisory" ;;
                 *) echo "  1. suite $target" ;;
             esac
             ;;
@@ -715,8 +689,6 @@ run_registry_target() {
             fi
             for step in \
                 "suite stack-contract" \
-                "suite agent-security" \
-                "suite agent-capability" \
                 "ts-unit" \
                 "ts-boundary" \
                 "ts-app-smoke" \
@@ -740,14 +712,6 @@ run_registry_target() {
         kt-live-ingestion|stack-live-ingestion) run_runner suite stack-live-ingestion ;;
         kt-recovery|stack-recovery) run_runner suite stack-recovery ;;
         kt-full|stack-full) run_runner suite stack-full ;;
-        kt-agent-env|agent-env) run_runner suite agent-env ;;
-        kt-agent-expand|agent-expand) run_runner suite agent-expand ;;
-        kt-agent-fixtures|agent-fixtures) run_runner suite agent-fixtures ;;
-        kt-agent-runtime|agent-runtime) run_runner suite agent-runtime ;;
-        kt-agent-lab|agent-lab) run_runner suite agent-lab ;;
-        kt-agent-security|agent-security) run_runner suite agent-security ;;
-        kt-agent-capability|agent-capability) run_runner suite agent-capability ;;
-        kt-agent-advisory|agent-advisory) run_runner suite agent-advisory ;;
         ts-unit|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all)
             run_runner "$target" "$@"
             ;;
@@ -846,10 +810,10 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full kt-agent-env kt-agent-expand kt-agent-fixtures kt-agent-runtime kt-agent-lab kt-agent-security kt-agent-capability kt-agent-advisory ts-unit ts-boundary ts-app-smoke ts-sso ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
-    printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full agent-security agent-capability agent-advisory agent-env agent-expand agent-fixtures agent-runtime agent-lab kotlin-all
+    printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
     echo ""
     echo "Granular Kotlin managed tests:"
     run_kotlin_metadata list kotlin-all
@@ -858,7 +822,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|kt-agent-env|kt-agent-expand|kt-agent-fixtures|kt-agent-runtime|kt-agent-lab|kt-agent-security|kt-agent-capability|kt-agent-advisory|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -868,7 +832,7 @@ case "$COMMAND" in
         run_runner suite "${1:-$DEFAULT_KT_SUITE}"
         ;;
     kt-list)
-        printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full agent-security agent-capability agent-advisory agent-env agent-expand agent-fixtures agent-runtime agent-lab kotlin-all
+        printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
         ;;
     kt-tests)
         run_kotlin_metadata list "${1:-kotlin-all}"
@@ -905,30 +869,6 @@ case "$COMMAND" in
         ;;
     kt-full)
         run_runner suite stack-full
-        ;;
-    kt-agent-env)
-        run_runner suite agent-env
-        ;;
-    kt-agent-expand)
-        run_runner suite agent-expand
-        ;;
-    kt-agent-fixtures)
-        run_runner suite agent-fixtures
-        ;;
-    kt-agent-runtime)
-        run_runner suite agent-runtime
-        ;;
-    kt-agent-lab)
-        run_runner suite agent-lab
-        ;;
-    kt-agent-security)
-        run_runner suite agent-security
-        ;;
-    kt-agent-capability)
-        run_runner suite agent-capability
-        ;;
-    kt-agent-advisory)
-        run_runner suite agent-advisory
         ;;
     ts)
         run_runner ts "$@"
