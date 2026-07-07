@@ -22,15 +22,10 @@ const visualEvidence = new Map<string, string>([
   ['qbittorrent/transfers', 'Visual: northstar-portal-backup.iso transfer row is visible in the qBittorrent transfer table.'],
   ['qbittorrent/settings', 'Visual: Options dialog is open with seeded transfer context, configured log path, and runbook tag filters visible.'],
   ['sogo/contacts', 'Visual: SOGo address-book contact-category controls are visible for the authenticated user.'],
-  ['workspaces/cleanup-state', 'Visual: workspace lifecycle table and create controls are visible, proving cleanup/state management is exposed even when no active lease is present.'],
   ['kopia/maintenance', 'Visual: Kopia task history table shows a completed repository maintenance/open task.'],
 ]);
 
 const evidenceRules = new Map<string, EvidenceRule>([
-  ['chatgpt-connector/overview', { label: 'ChatGPT connector seeded agent account', pattern: /Northstar Ops Agent|business demo account/i }],
-  ['chatgpt-connector/agent-account', { label: 'ChatGPT connector seeded agent account', pattern: /Northstar Ops Agent|agent-northstar-ops/i }],
-  ['chatgpt-connector/token-management', { label: 'ChatGPT connector seeded demo token', pattern: /mcp_[A-Za-z0-9]|token\.minted|business demo token/i }],
-  ['chatgpt-connector/activity-status', { label: 'ChatGPT connector seeded audit event', pattern: /token\.minted|account\.created|business demo token minted/i }],
   ['jupyterhub/lab-workspace', { label: 'Jupyter seeded workspace folder', pattern: /platform-notebooks/i }],
   ['jupyterhub/file-browser', { label: 'Jupyter seeded workspace folder', pattern: /platform-notebooks/i }],
   ['jupyterhub/launcher', { label: 'Jupyter runtime launcher', pattern: /Python 3 \(ipykernel\)|JavaScript \(Node\.js\)|Kotlin/i }],
@@ -41,11 +36,6 @@ const evidenceRules = new Map<string, EvidenceRule>([
   ['forgejo/issues', { label: 'Forgejo seeded Northstar healthcheck issue', pattern: /Verify backup healthchecks|Alice Morgan/i }],
   ['forgejo/pull-requests', { label: 'Forgejo seeded Northstar pull request', pattern: /Review Northstar handoff runbook|Northstar runbook PR/i }],
   ['forgejo/user-settings', { label: 'Forgejo live account settings', pattern: /Public Profile|User visibility|Full Name/i }],
-  ['workspaces/overview', { label: 'Workspace provisioner seeded runbook workspace', pattern: /Northstar Runbook Workspace|northstar-runbook-workspace/i }],
-  ['workspaces/create-form', { label: 'Workspace provisioner seeded runbook workspace', pattern: /Northstar Runbook Workspace|northstar-runbook-workspace/i }],
-  ['workspaces/workspace-list', { label: 'Workspace provisioner seeded runbook workspace', pattern: /Northstar Runbook Workspace|northstar-runbook-workspace/i }],
-  ['workspaces/access-material', { label: 'Workspace provisioner seeded access material', pattern: /Northstar Runbook Workspace|ssh_port|39222|agent/i }],
-  ['workspaces/cleanup-state', { label: 'Workspace provisioner seeded lease data', pattern: /Northstar Runbook Workspace|2026-06-12|lease/i }],
   ['tas-events/map-list', { label: 'Tasmania event rows', pattern: /Hobart Makers Open Night|Salamanca Arts Centre|City of Hobart/i }],
   ['tas-events/event-detail', { label: 'Tasmania event detail', pattern: /Hobart Makers Open Night|Salamanca Arts Centre|Source|Open/i }],
   ['tas-events/saved-planning', { label: 'Tasmania planning data', pattern: /Saved|Timeline|Hobart Makers Open Night|Live Digest/i }],

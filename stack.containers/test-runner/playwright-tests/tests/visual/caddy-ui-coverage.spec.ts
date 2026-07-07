@@ -22,7 +22,6 @@ const excludedVisualCoverageHosts = new Set([
   'www',
   'homepage',
   ...(process.env.TESTDEV_SKIP_GPU_INGESTION === '1' ? ['pipeline'] : []),
-  ...(process.env.ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED === '1' ? [] : ['chatgpt-connector', 'workspaces']),
 ]);
 const genericVisualHosts = new Set(visualRoutes.map((route) => route.host));
 const allCoveredVisualHosts = new Set<string>([

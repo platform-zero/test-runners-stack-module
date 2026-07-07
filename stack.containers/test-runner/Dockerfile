@@ -37,7 +37,7 @@ RUN id -u pwuser >/dev/null 2>&1 && \
     groupadd -f docker && usermod -aG docker pwuser
 
 RUN mkdir -p /etc/docker && \
-    echo '{"insecure-registries": ["192.168.0.11:5000", "registry:5000", "isolated-registry:5000"], "dns": ["127.0.0.11"]}' > /etc/docker/daemon.json
+    echo '{"insecure-registries": ["registry.example.invalid:5000", "registry:5000", "isolated-registry:5000"], "dns": ["127.0.0.11"]}' > /etc/docker/daemon.json
 
 WORKDIR /app
 
@@ -66,8 +66,6 @@ USER root
 
 COPY stack.kotlin/test-runner/build/libs/test-runner-*-all.jar /app/test-runner.jar
 COPY --chown=pwuser:pwuser stack.containers/test-runner/playwright-tests /app/playwright-tests
-COPY stack.containers/agent-workspace /app/stack.containers/agent-workspace
-COPY stack.containers/agent-workspace-notebook /app/stack.containers/agent-workspace-notebook
 COPY stack.containers/test-runner/fixtures/caddy-hosts.txt /app/repo-fixtures/caddy-hosts.txt
 COPY stack.containers/test-runner/fixtures/agent-build-demo /app/stack.containers/test-runner/fixtures/agent-build-demo
 COPY stack.containers/test-runner/fixtures/agent-lang /app/stack.containers/test-runner/fixtures/agent-lang

@@ -113,7 +113,7 @@ print_usage() {
     echo "  kt-agent-expand   Run optional profile installation checks"
     echo "  kt-agent-fixtures Run deterministic polyglot build fixtures"
     echo "  kt-agent-runtime  Run Aider runtime checks"
-    echo "  kt-agent-lab      Run owned workspace-provisioner integration checks"
+    echo "  kt-agent-lab      Run retired agent lab checks"
     echo "  kt-agent-security Run deterministic agent security boundary tests"
     echo "  kt-agent-capability Run deterministic agent capability contract tests"
     echo "  kt-agent-advisory Run advisory agent reliability and LLM drift tests"
@@ -781,7 +781,6 @@ print_changed_plan() {
         case "$file" in
             stack.kotlin/test-runner/*) targets+=("source-unit" "kt-contract") ;;
             stack.kotlin/search-service/*) targets+=("source-unit" "kt-live-ingestion") ;;
-            stack.kotlin/workspace-provisioner/*|stack.containers/agent-workspace/*|stack.containers/agent-workspace-notebook/*) targets+=("source-unit" "kt-agent-lab" "kt-agent-capability") ;;
             stack.kotlin/*) targets+=("source-unit") ;;
             stack.containers/test-runner/playwright-tests/tests/unit/*) targets+=("ts-unit") ;;
             stack.containers/test-runner/playwright-tests/tests/fast/*) targets+=("ts-boundary" "ts-app-smoke" "ts-sso") ;;

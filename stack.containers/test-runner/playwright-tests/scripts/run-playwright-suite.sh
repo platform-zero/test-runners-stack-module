@@ -6,27 +6,6 @@ PLAYWRIGHT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 
 project_name="${TEST_RUNNER_COMPOSE_PROJECT_NAME:-${COMPOSE_PROJECT_NAME:-webservices}}"
 
-isolated_docker_vm_identity_configured() {
-  if [ -n "${ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED:-}" ]; then
-    [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "1" ] || [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "true" ]
-    return $?
-  fi
-
-  [ -n "${ISOLATED_DOCKER_VM_SSH_DIR:-}" ] && [ -f "${ISOLATED_DOCKER_VM_SSH_DIR}/id_ed25519" ]
-}
-
-detect_optional_capabilities() {
-  if isolated_docker_vm_identity_configured; then
-    export ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED=1
-  else
-    export ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED=0
-  fi
-}
-
-isolated_docker_vm_socket_skip_reason() {
-  printf '%s' 'isolated Docker VM socket is not configured'
-}
-
 container_name_for_service() {
   local service_name="$1"
   docker ps \
@@ -96,7 +75,6 @@ run_specs() {
 run_group() {
   local group="$1"
   cd "$PLAYWRIGHT_DIR"
-  detect_optional_capabilities
 
   case "$group" in
     route)
@@ -104,12 +82,6 @@ run_group() {
       ;;
     boundary)
       PW_SKIP_GLOBAL_SETUP=1 run_specs "" tests/fast/route-contract.spec.ts tests/deep/forward-auth/non-browser-api-endpoints.spec.ts
-      if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" = "1" ]; then
-        require_services workspace-provisioner
-        PW_SKIP_GLOBAL_SETUP=1 run_specs "workspaces" tests/fast/workspaces-boundary.spec.ts
-      else
-        printf 'Skipping boundary:workspaces: %s.\n' "$(isolated_docker_vm_socket_skip_reason)"
-      fi
       ;;
     app-smoke)
       require_services caddy keycloak keycloak-auth-gateway
@@ -203,14 +175,6 @@ run_group() {
       require_services caddy keycloak keycloak-auth-gateway vaultwarden
       run_specs "vaultwarden,api.vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts tests/deep/oidc/vaultwarden.spec.ts
       ;;
-    deep:workspaces)
-      if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" != "1" ]; then
-        printf 'Skipping %s: %s.\n' "$group" "$(isolated_docker_vm_socket_skip_reason)"
-        return 0
-      fi
-      require_services caddy keycloak keycloak-auth-gateway workspace-provisioner
-      run_specs "workspaces" tests/deep/forward-auth/workspaces.spec.ts tests/fast/workspaces-boundary.spec.ts
-      ;;
     deep:session)
       require_services caddy keycloak keycloak-auth-gateway jupyterhub prometheus portal grafana bookstack
       run_specs "jupyterhub,prometheus,portal,grafana,bookstack" tests/deep/forward-auth/session.spec.ts tests/deep/oidc/session.spec.ts
@@ -237,14 +201,6 @@ run_group() {
     visual:utilities)
       require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus qbittorrent vaultwarden sogo autobattler tas-dashboard
       run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo,autobattler,tas,tas-events" tests/visual/smoke-visual.spec.ts
-      ;;
-    visual:workspaces)
-      if [ "$ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED" != "1" ]; then
-        printf 'Skipping %s: %s.\n' "$group" "$(isolated_docker_vm_socket_skip_reason)"
-        return 0
-      fi
-      require_services caddy keycloak keycloak-auth-gateway workspace-provisioner chatgpt-connector
-      run_specs "workspaces,chatgpt-connector" tests/visual/smoke-visual.spec.ts
       ;;
     *)
       printf 'Unknown Playwright suite group: %s\n' "$group" >&2
@@ -276,7 +232,6 @@ run_target() {
       if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
         groups="$groups deep:pipeline"
       fi
-      groups="$groups deep:workspaces"
       # shellcheck disable=SC2086
       run_composed $groups
       ;;
@@ -285,7 +240,6 @@ run_target() {
       if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
         groups="$groups deep:pipeline"
       fi
-      groups="$groups deep:workspaces"
       # shellcheck disable=SC2086
       run_composed $groups
       ;;
@@ -295,7 +249,7 @@ run_target() {
       run_composed $groups
       ;;
     visual)
-      groups="visual:coverage visual:portal visual:progression visual:apps visual:media visual:utilities visual:workspaces"
+      groups="visual:coverage visual:portal visual:progression visual:apps visual:media visual:utilities"
       # shellcheck disable=SC2086
       run_composed $groups
       ;;

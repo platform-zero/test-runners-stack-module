@@ -160,25 +160,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: true, visual: true, deep: true },
   },
   {
-    host: 'chatgpt-connector',
-    label: 'ChatGPT Connector',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    smoke: {
-      matcher: /\bChatGPT MCP Connector\b|\bPOST \/mcp\b|\bAgent account APIs\b/i,
-      selector: 'text=/ChatGPT MCP Connector|POST \\/mcp|Agent account APIs/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-    },
-    visual: {
-      fileStem: 'chatgpt-connector-authenticated',
-      matcher: /\bChatGPT MCP Connector\b|\bPOST \/mcp\b|\bAgent account APIs\b/i,
-      selector: 'text=/ChatGPT MCP Connector|POST \\/mcp|Agent account APIs/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: true, visual: true, deep: true },
-  },
-  {
     host: 'sogo',
     label: 'SOGo',
     kind: 'oidc_login',
@@ -419,24 +400,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
       reason: 'Synthetic Keycloak-protected route is covered by Keycloak OIDC smoke tests.',
     },
     ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
-    host: 'workspaces',
-    label: 'Workspaces',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    smoke: {
-      matcher: /Disposable Workspaces|Create Workspace|Your Workspaces/i,
-      selector: '#displayName, #createButton, #workspaceRows',
-    },
-    visual: {
-      fileStem: 'workspaces-authenticated',
-      matcher: /Disposable Workspaces|Create Workspace|Your Workspaces/i,
-      selector: '#displayName, #createButton, #workspaceRows',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: true, visual: true, deep: true },
   },
   {
     host: 'jupyterhub',
@@ -711,8 +674,6 @@ export function findRoute(host: string): BrowserRoute {
   return route;
 }
 
-const optionalIsolatedDockerVmHosts = new Set(['chatgpt-connector', 'workspaces']);
-
 function selectedRouteHosts(): Set<string> | null {
   const raw = process.env.PLAYWRIGHT_ROUTE_HOSTS || '';
   const hosts = raw
@@ -724,9 +685,6 @@ function selectedRouteHosts(): Set<string> | null {
 
 function isRuntimeExcluded(route: BrowserRoute): boolean {
   if (process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline') {
-    return true;
-  }
-  if (process.env.ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED !== '1' && optionalIsolatedDockerVmHosts.has(route.host)) {
     return true;
   }
   const selectedHosts = selectedRouteHosts();

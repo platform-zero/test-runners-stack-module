@@ -7,54 +7,6 @@
   "captureMode": "stack-standard-evidence",
   "services": [
     {
-      "slug": "chatgpt-connector",
-      "name": "ChatGPT Connector",
-      "host": "chatgpt-connector",
-      "features": [
-        {
-          "id": "overview",
-          "title": "Connector Overview",
-          "path": "/",
-          "expectedText": [
-            "ChatGPT",
-            "Connector",
-            "Northstar Ops Agent"
-          ],
-          "operatorValue": "Shows the business-facing control plane for ChatGPT MCP integration."
-        },
-        {
-          "id": "agent-account",
-          "title": "Agent Account Creation",
-          "path": "/",
-          "expectedText": [
-            "Northstar Ops Agent",
-            "agent account"
-          ],
-          "operatorValue": "Shows how agent accounts can be provisioned and managed."
-        },
-        {
-          "id": "token-management",
-          "title": "Token Management",
-          "path": "/",
-          "expectedText": [
-            "demo-token",
-            "token"
-          ],
-          "operatorValue": "Shows access-token surfaces a client would care about for integrations."
-        },
-        {
-          "id": "activity-status",
-          "title": "Activity and Status",
-          "path": "/",
-          "expectedText": [
-            "token.minted",
-            "account.created"
-          ],
-          "operatorValue": "Shows operational feedback for connector activity and errors."
-        }
-      ]
-    },
-    {
       "slug": "jupyterhub",
       "name": "JupyterHub",
       "host": "jupyterhub",
@@ -185,65 +137,6 @@
             "Profile"
           ],
           "operatorValue": "Shows account-level governance and identity settings."
-        }
-      ]
-    },
-    {
-      "slug": "workspaces",
-      "name": "Workspaces",
-      "host": "workspaces",
-      "features": [
-        {
-          "id": "overview",
-          "title": "Disposable Workspace Overview",
-          "path": "/",
-          "expectedText": [
-            "Disposable",
-            "Northstar Runbook Workspace"
-          ],
-          "operatorValue": "Shows the workspace product surface and its core promise."
-        },
-        {
-          "id": "create-form",
-          "title": "Create Workspace Form",
-          "path": "/",
-          "expectedText": [
-            "Create",
-            "Northstar Runbook Workspace"
-          ],
-          "operatorValue": "Shows repeatable provisioning for development or agent work."
-        },
-        {
-          "id": "workspace-list",
-          "title": "Workspace Inventory",
-          "path": "/",
-          "expectedText": [
-            "Northstar Runbook Workspace",
-            "running"
-          ],
-          "operatorValue": "Shows active workspace tracking and governance."
-        },
-        {
-          "id": "access-material",
-          "title": "Access Material",
-          "path": "/",
-          "expectedText": [
-            "ssh",
-            "Northstar Runbook Workspace",
-            "agent"
-          ],
-          "operatorValue": "Shows how connection details are exposed after provisioning."
-        },
-        {
-          "id": "cleanup-state",
-          "title": "Cleanup and Expiry",
-          "path": "/",
-          "expectedText": [
-            "lease",
-            "ACTIONS",
-            "Northstar Runbook Workspace"
-          ],
-          "operatorValue": "Shows workspace lifecycle management rather than unmanaged servers."
         }
       ]
     },

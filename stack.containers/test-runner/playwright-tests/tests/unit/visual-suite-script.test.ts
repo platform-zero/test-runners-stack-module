@@ -86,15 +86,14 @@ describe('visual suite script', () => {
     expect(centralizedModuleSpecs).toEqual([]);
   });
 
-  it('does not require optional VM-only services for the default visual suite unconditionally', () => {
+  it('does not route visual coverage through removed workspace-specific suites', () => {
     const script = fs.readFileSync(modularSuiteScript, 'utf8');
-    expect(script).toContain('visual:workspaces)');
-    expect(script).toContain('ISOLATED_DOCKER_VM_IDENTITY_CONFIGURED');
+    expect(script).not.toMatch(/visual:[a-z-]*workspace[a-z-]*\)/);
   });
 
   it('keeps visual groups free of deep service specs', () => {
     const script = fs.readFileSync(modularSuiteScript, 'utf8');
-    const visualSuites = ['visual:coverage', 'visual:portal', 'visual:progression', 'visual:apps', 'visual:media', 'visual:utilities', 'visual:workspaces'];
+    const visualSuites = ['visual:coverage', 'visual:portal', 'visual:progression', 'visual:apps', 'visual:media', 'visual:utilities'];
 
     for (const suiteName of visualSuites) {
       expect(suiteCaseBody(script, suiteName)).not.toContain('tests/deep/');
