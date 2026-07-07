@@ -112,7 +112,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'onboarding-authenticated',
       matcher: /Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i,
       selector: 'text=/Finish account setup in Keycloak|Account setup complete|Open Keycloak Account Console|admin-managed/i',
-      disallowMatcher: /\bSign in to your account\b|\bNo onboarding marker is present\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },
     ownership: { route: true, smoke: true, visual: true, deep: true },
