@@ -1,0 +1,45 @@
+{
+  "configuration": {
+    "schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "id": "test-runners",
+  "overlays": [
+    "stack.compose/test-runners.yml",
+    "stack.config/test-runner",
+    "stack.containers/test-runner"
+  ],
+  "provides": [
+    {
+      "capability": "module:test-runners",
+      "version": "1"
+    }
+  ],
+  "requires": [
+    {
+      "capability": "module:stack-foundation",
+      "version": "1"
+    }
+  ],
+  "schemaVersion": 1,
+  "services": [
+    {
+      "name": "test-runner",
+      "routes": [],
+      "volumes": []
+    },
+    {
+      "name": "test-runner-managed",
+      "routes": [],
+      "volumes": []
+    }
+  ],
+  "verification": {
+    "commands": [
+      "test -f stack.module.json && test -f module.json"
+    ]
+  }
+}
