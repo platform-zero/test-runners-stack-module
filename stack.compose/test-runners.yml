@@ -2,13 +2,11 @@
 # This file is packaged into release artifacts via BUILD.bazel; edit it directly.
 x-test-base: &test_runner_base
   build:
-    context: .
+    context: ./build
     dockerfile: ./stack.containers/test-runner/Dockerfile
   image: stack/test-runner:local-build
   pull_policy: never
   init: true
-  labels:
-    - "com.centurylinklabs.watchtower.enable=false"
   depends_on:
     postgres-ssd-bootstrap:
       condition: service_completed_successfully
