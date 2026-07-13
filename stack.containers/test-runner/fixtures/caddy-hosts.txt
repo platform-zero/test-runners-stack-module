@@ -31,7 +31,6 @@ api.mastodon
 apex
 portal
 homepage
-progress
 www
 mail
 jupyterhub

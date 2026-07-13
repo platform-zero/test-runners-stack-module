@@ -180,16 +180,9 @@ run_group() {
       require_services caddy keycloak keycloak-auth-gateway portal
       run_specs "apex,portal" tests/visual/smoke-visual.spec.ts tests/visual/portal-role-dashboards.spec.ts
       ;;
-    visual:progression)
-      run_specs "" tests/visual/progression-dashboard.spec.ts
-      ;;
     visual:apps)
       local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal)
       hosts="alerts,bookstack,forgejo,grafana,onboarding,portal"
-      if component_selected progression; then
-        services+=(progression)
-        hosts="${hosts},progress"
-      fi
       if component_selected search; then
         services+=(opensearch)
         hosts="${hosts},search"
@@ -264,9 +257,6 @@ run_target() {
       ;;
     visual)
       groups="visual:coverage visual:portal visual:apps visual:media visual:utilities"
-      if component_selected progression; then
-        groups="$groups visual:progression"
-      fi
       # shellcheck disable=SC2086
       run_composed $groups
       ;;

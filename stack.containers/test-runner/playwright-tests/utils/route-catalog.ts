@@ -341,35 +341,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: true },
   },
   {
-    host: 'progress',
-    label: 'Progression',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    smoke: {
-      matcher: /Sovereign Compute Progression|Ownership Path|Next Action/i,
-      selector: 'text=/Sovereign Compute Progression|Ownership Path|Next Action/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-    },
-    visual: {
-      fileStem: 'progression-authenticated',
-      matcher: /Sovereign Compute Progression|Ownership Path|Next Action/i,
-      selector: 'text=/Sovereign Compute Progression|Ownership Path|Next Action/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      prepare: async (page) => {
-        await page.evaluate(async () => {
-          const response = await fetch('/api/scan', { method: 'POST' });
-          if (!response.ok) {
-            throw new Error(`progression scan returned HTTP ${response.status}`);
-          }
-        });
-        await page.reload({ waitUntil: 'networkidle' });
-        await page.getByText(/Proven|Current slice complete|BookStack route and central-login access evidence passed/i).first().waitFor({ timeout: 15000 });
-      },
-      quality: 85,
-    },
-    ownership: { route: true, smoke: true, visual: true, deep: false },
-  },
-  {
     host: 'keycloak',
     label: 'Keycloak Portal',
     kind: 'non_ui',
@@ -661,7 +632,6 @@ const optionalRouteComponents: Record<string, string> = {
   'matrix-rtc': 'synapse',
   models: 'inference',
   pipeline: 'pipeline',
-  progress: 'progression',
   search: 'search',
 };
 
