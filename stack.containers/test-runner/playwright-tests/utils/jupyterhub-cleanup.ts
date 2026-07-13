@@ -5,9 +5,19 @@ type JupyterContainer = {
   username: string;
 };
 
-function runDocker(args: string[]): string {
-  return execFileSync('docker', args, {
+function containerCli(): string {
+  return (process.env.TEST_RUNNER_CONTAINER_CLI || 'docker').trim() || 'docker';
+}
+
+function runContainerCli(args: string[]): string {
+  const cli = containerCli();
+  const env = { ...process.env };
+  if (cli === 'podman' && !env.CONTAINER_HOST) {
+    env.CONTAINER_HOST = 'unix:///run/podman/podman.sock';
+  }
+  return execFileSync(cli, args, {
     encoding: 'utf-8',
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
@@ -20,10 +30,10 @@ function parseJupyterUsername(containerName: string): string | null {
 export function listJupyterContainers(): JupyterContainer[] {
   let output = '';
   try {
-    output = runDocker(['ps', '-a', '--format', '{{.Names}}']);
+    output = runContainerCli(['ps', '-a', '--format', '{{.Names}}']);
   } catch (error) {
     const message = String((error as Error)?.message || error);
-    console.warn(`⚠️  Unable to list Jupyter containers via Docker: ${message}`);
+    console.warn(`⚠️  Unable to list Jupyter containers via ${containerCli()}: ${message}`);
     return [];
   }
 
@@ -58,7 +68,7 @@ export function removeJupyterContainersForUsers(usernames: string[]): string[] {
   }
 
   try {
-    runDocker(['rm', '-f', ...matchingContainers]);
+    runContainerCli(['rm', '-f', ...matchingContainers]);
     return matchingContainers;
   } catch (error) {
     const message = String((error as Error)?.message || error);

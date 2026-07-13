@@ -20,6 +20,8 @@ services:
       TEST_RUNNER_COMPONENTS_LOCK_FILE: "/component-lock/components.lock.json"
       TEST_RUNNER_COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-webservices}"
       TEST_RUNNER_CONTAINER_CLI: "podman"
+      CONTAINER_HOST: "unix:///run/podman/podman.sock"
+      PLAYWRIGHT_ORIGIN_BYPASS_HOST: "caddy"
       TESTDEV_SKIP_GPU_INGESTION: "${TESTDEV_SKIP_GPU_INGESTION:-0}"
       CADDY_CONTAINER: "${CADDY_CONTAINER:-caddy}"
       DOMAIN: "${DOMAIN}"
@@ -122,6 +124,9 @@ services:
       source: "caddy_ca"
       target: "/ca"
       read_only: true
+    - type: "bind"
+      source: "${TEST_RUNNER_PODMAN_SOCKET:-/run/user/999/podman/podman.sock}"
+      target: "/run/podman/podman.sock"
     restart: "no"
     tmpfs:
     - "/tmp"
@@ -146,6 +151,8 @@ services:
       TEST_RUNNER_COMPONENTS_LOCK_FILE: "/component-lock/components.lock.json"
       TEST_RUNNER_COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-webservices}"
       TEST_RUNNER_CONTAINER_CLI: "podman"
+      CONTAINER_HOST: "unix:///run/podman/podman.sock"
+      PLAYWRIGHT_ORIGIN_BYPASS_HOST: "caddy"
       TESTDEV_SKIP_GPU_INGESTION: "${TESTDEV_SKIP_GPU_INGESTION:-0}"
       CADDY_CONTAINER: "${CADDY_CONTAINER:-caddy}"
       DOMAIN: "${DOMAIN}"
@@ -248,6 +255,9 @@ services:
       source: "caddy_ca"
       target: "/ca"
       read_only: true
+    - type: "bind"
+      source: "${TEST_RUNNER_PODMAN_SOCKET:-/run/user/999/podman/podman.sock}"
+      target: "/run/podman/podman.sock"
     command:
     - "exec /container-entrypoint.sh ${TEST_RUNNER_MANAGED_COMMAND_LINE:-suite stack-contract}"
     entrypoint:

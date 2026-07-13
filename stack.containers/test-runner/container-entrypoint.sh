@@ -269,17 +269,17 @@ case "${1:-suite}" in
     suite)
         suite_name="${2:-${TEST_SUITE_NAME:-stack-contract}}"
         log "Running suite '${suite_name}'"
-        exec_as_test_user java -jar /app/test-runner.jar --env container --suite "$suite_name"
+        exec java -jar /app/test-runner.jar --env container --suite "$suite_name"
         ;;
     suite-list)
         suite_name="${2:-${TEST_SUITE_NAME:-stack-contract}}"
         log "Listing suite '${suite_name}'"
-        exec_as_test_user java -jar /app/test-runner.jar --env container --suite "$suite_name" --list-tests
+        exec java -jar /app/test-runner.jar --env container --suite "$suite_name" --list-tests
         ;;
     suite-plan)
         suite_name="${2:-${TEST_SUITE_NAME:-stack-contract}}"
         log "Planning suite '${suite_name}'"
-        exec_as_test_user java -jar /app/test-runner.jar --env container --suite "$suite_name" --plan
+        exec java -jar /app/test-runner.jar --env container --suite "$suite_name" --plan
         ;;
     suite-test)
         if [ -z "${2:-}" ]; then
@@ -288,7 +288,7 @@ case "${1:-suite}" in
         fi
         suite_name="${3:-${TEST_SUITE_NAME:-stack-contract}}"
         log "Running Kotlin managed test '${2}' from suite '${suite_name}'"
-        exec_as_test_user java -jar /app/test-runner.jar --env container --suite "$suite_name" --test-id "$2"
+        exec java -jar /app/test-runner.jar --env container --suite "$suite_name" --test-id "$2"
         ;;
     ts)
         log "Running all TypeScript tests"
