@@ -62,6 +62,23 @@ require_services() {
   fi
 }
 
+component_selected() {
+  local component="$1" candidate
+  for candidate in \
+    "${TEST_RUNNER_COMPONENTS_LOCK_FILE:-}" \
+    "${WEBSERVICES_COMPONENTS_LOCK_FILE:-}" \
+    "/component-lock/components.lock.json" \
+    "/runtime/components.lock.json" \
+    "/app/build/site/components.lock.json" \
+    "/app/site/components.lock.json"; do
+    [ -n "$candidate" ] || continue
+    [ -f "$candidate" ] || continue
+    jq -e --arg component "$component" '.components | arrays | index($component) != null' "$candidate" >/dev/null 2>&1
+    return $?
+  done
+  return 1
+}
+
 run_specs() {
   local route_hosts="$1"
   shift
@@ -191,8 +208,14 @@ run_group() {
       run_specs "" tests/visual/progression-dashboard.spec.ts
       ;;
     visual:apps)
-      require_services caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal progression opensearch airflow-webserver airflow-scheduler ingestion-runner
-      run_specs "alerts,bookstack,forgejo,grafana,onboarding,portal,progress,search,pipeline" tests/visual/smoke-visual.spec.ts
+      services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal progression opensearch)
+      hosts="alerts,bookstack,forgejo,grafana,onboarding,portal,progress,search"
+      if component_selected pipeline; then
+        services+=(airflow-webserver airflow-scheduler ingestion-runner)
+        hosts="${hosts},pipeline"
+      fi
+      require_services "${services[@]}"
+      run_specs "$hosts" tests/visual/smoke-visual.spec.ts
       ;;
     visual:media)
       require_services caddy keycloak jellyfin mastodon-web mastodon-sidekiq mastodon-streaming seafile onlyoffice

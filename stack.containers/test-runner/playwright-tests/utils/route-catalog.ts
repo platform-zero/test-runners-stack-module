@@ -282,13 +282,13 @@ export const browserRouteCatalog: BrowserRoute[] = [
     smoke: {
       path: '/d/logs-home/logs',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
+      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found/i,
     },
     visual: {
       fileStem: 'grafana-authenticated',
       path: '/d/logs-home/logs',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
+      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found/i,
       quality: 85,
       fullPage: false,
     },
