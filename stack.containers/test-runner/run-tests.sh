@@ -289,8 +289,11 @@ resolve_test_runner_systemd_runtime_host_dir() {
 
 docker_compose() {
     ensure_compose_artifacts
+    local components_lock_file
+    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     TEST_RESULTS_HOST_DIR="$(resolve_test_results_host_dir)" \
     TEST_RUNNER_RUNTIME_HOST_DIR="$(resolve_test_runner_runtime_host_dir)" \
+    TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE="$components_lock_file" \
     TEST_RUNNER_HOST_XDG_RUNTIME_DIR="$(resolve_test_runner_systemd_runtime_host_dir)" \
     docker compose \
         --env-file "$RUNTIME_ENV_FILE" \
