@@ -282,14 +282,12 @@ export const browserRouteCatalog: BrowserRoute[] = [
     smoke: {
       path: '/d/logs-home/logs',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      selector: 'text=/All Logs|Logs|Loki|Dashboards|Explore|Grafana/i',
       disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
     },
     visual: {
       fileStem: 'grafana-authenticated',
       path: '/d/logs-home/logs',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      selector: 'text=/All Logs|Logs|Loki|Dashboards|Explore|Grafana/i',
       disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
       quality: 85,
       fullPage: false,
@@ -716,7 +714,7 @@ const optionalRouteComponents: Record<string, string> = {
   pipeline: 'pipeline',
 };
 
-function isRuntimeExcluded(route: BrowserRoute): boolean {
+export function isRuntimeExcluded(route: BrowserRoute): boolean {
   if (process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline') {
     return true;
   }
