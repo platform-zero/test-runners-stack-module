@@ -240,6 +240,34 @@ resolve_test_runner_runtime_host_dir() {
     )
 }
 
+resolve_test_runner_components_lock_host_file() {
+    local explicit="${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE_OVERRIDE:-${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE:-}}"
+    if [ -n "$explicit" ]; then
+        printf '%s\n' "$explicit"
+        return 0
+    fi
+
+    local candidates=(
+        "$DIST_DIR/site/components.lock.json"
+        "$(dirname "$DIST_DIR")/build/site/components.lock.json"
+        "$COMPOSE_PROJECT_DIR/build/site/components.lock.json"
+        "$COMPOSE_PROJECT_DIR/site/components.lock.json"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            (
+                cd "$(dirname "$candidate")"
+                printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")"
+            )
+            return 0
+        fi
+    done
+
+    printf '%s\n' "/dev/null"
+}
+
 resolve_test_runner_systemd_runtime_host_dir() {
     local runtime_dir="${TEST_RUNNER_HOST_XDG_RUNTIME_DIR_OVERRIDE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}}"
 
@@ -397,6 +425,8 @@ docker_compose_with_env() {
     shift
     local runtime_root
     runtime_root="$(resolve_test_runner_runtime_host_dir)"
+    local components_lock_file
+    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     local systemd_runtime_root
     systemd_runtime_root="$(resolve_test_runner_systemd_runtime_host_dir)"
     local env_assignments=()
@@ -408,7 +438,7 @@ docker_compose_with_env() {
         shift
     fi
 
-    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" docker compose \
+    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" docker compose \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$COMPOSE_PROJECT_DIR" \
         -f "$PRIMARY_COMPOSE_FILE" \

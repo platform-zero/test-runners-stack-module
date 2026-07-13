@@ -14,6 +14,7 @@ import {
 
 describe('route-catalog', () => {
   const originalHostsFile = process.env.CADDY_HOSTS_FILE;
+  const originalComponentsLockFile = process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE;
 
   afterEach(() => {
     if (originalHostsFile === undefined) {
@@ -21,6 +22,12 @@ describe('route-catalog', () => {
     } else {
       process.env.CADDY_HOSTS_FILE = originalHostsFile;
     }
+    if (originalComponentsLockFile === undefined) {
+      delete process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE;
+    } else {
+      process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = originalComponentsLockFile;
+    }
+    jest.resetModules();
     jest.restoreAllMocks();
   });
 
@@ -139,6 +146,26 @@ describe('route-catalog', () => {
     process.env.CADDY_HOSTS_FILE = hostsFile;
 
     expect(uncataloguedHosts()).toEqual(['unknown-host']);
+  });
+
+  it('excludes optional routes when their components are not selected', () => {
+    const componentsLockFile = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'route-catalog-components-')),
+      'components.lock.json'
+    );
+    fs.writeFileSync(componentsLockFile, JSON.stringify({ components: ['core', 'jupyterhub', 'observability'] }));
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = componentsLockFile;
+
+    jest.isolateModules(() => {
+      const isolatedModule = require('../../utils/route-catalog') as {
+        routeContractRoutes: Array<{ host: string }>;
+        visualRoutes: Array<{ host: string }>;
+      };
+
+      expect(isolatedModule.routeContractRoutes.map((route) => route.host)).not.toContain('models');
+      expect(isolatedModule.routeContractRoutes.map((route) => route.host)).not.toContain('pipeline');
+      expect(isolatedModule.visualRoutes.map((route) => route.host)).not.toContain('pipeline');
+    });
   });
 
   it('throws when no caddy host inventory can be found', () => {

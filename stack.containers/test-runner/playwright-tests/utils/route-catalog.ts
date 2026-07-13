@@ -683,8 +683,46 @@ function selectedRouteHosts(): Set<string> | null {
   return hosts.length > 0 ? new Set(hosts) : null;
 }
 
+function selectedComponents(): Set<string> | null {
+  const candidates = [
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE,
+    process.env.WEBSERVICES_COMPONENTS_LOCK_FILE,
+    '/component-lock/components.lock.json',
+    '/runtime/components.lock.json',
+    '/app/build/site/components.lock.json',
+    '/app/site/components.lock.json',
+  ].filter((candidate): candidate is string => Boolean(candidate && candidate.trim().length > 0));
+
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { components?: unknown };
+      if (Array.isArray(parsed.components)) {
+        return new Set(parsed.components.filter((component): component is string => typeof component === 'string'));
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+const optionalRouteComponents: Record<string, string> = {
+  models: 'inference',
+  pipeline: 'pipeline',
+};
+
 function isRuntimeExcluded(route: BrowserRoute): boolean {
   if (process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline') {
+    return true;
+  }
+  const requiredComponent = optionalRouteComponents[route.host];
+  const components = selectedComponents();
+  if (requiredComponent && components !== null && !components.has(requiredComponent)) {
     return true;
   }
   const selectedHosts = selectedRouteHosts();
