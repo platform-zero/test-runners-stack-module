@@ -1,6 +1,6 @@
 ARG PLAYWRIGHT_VERSION=1.58.2
 
-FROM eclipse-temurin:21-jre-jammy AS temurin21
+FROM docker.io/library/eclipse-temurin:21-jre-jammy AS temurin21
 
 FROM mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-jammy
 
