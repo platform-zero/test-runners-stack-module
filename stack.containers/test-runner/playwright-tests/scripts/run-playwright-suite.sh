@@ -222,8 +222,8 @@ run_group() {
       run_specs "jellyfin,mastodon,seafile,onlyoffice" tests/visual/smoke-visual.spec.ts
       ;;
     visual:utilities)
-      require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus qbittorrent vaultwarden sogo autobattler tas-dashboard
-      run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo,autobattler,tas,tas-events" tests/visual/smoke-visual.spec.ts
+      require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus qbittorrent vaultwarden sogo
+      run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo" tests/visual/smoke-visual.spec.ts
       ;;
     *)
       printf 'Unknown Playwright suite group: %s\n' "$group" >&2

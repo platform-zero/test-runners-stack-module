@@ -44,8 +44,4 @@ models
 forgejo
 search
 pipeline
-autobattler
 qbittorrent
-tas-dashboard
-tas
-tas-events

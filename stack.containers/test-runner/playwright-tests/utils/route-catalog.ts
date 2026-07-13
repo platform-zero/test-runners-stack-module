@@ -573,20 +573,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'autobattler',
-    label: 'Autobattler',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'autobattler-authenticated',
-      matcher: /Your unit vs weak enemy|DEPLOYMENT|ENEMY LINE|Runner HP 20|Weak Enemy HP 6|TOKENS 2|Live board state/i,
-      selector: 'text=/Your unit vs weak enemy|DEPLOYMENT|ENEMY LINE|Runner HP 20|Weak Enemy HP 6|TOKENS 2|Live board state/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
     host: 'qbittorrent',
     label: 'qBittorrent',
     kind: 'forward_auth',
@@ -595,49 +581,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'qbittorrent-authenticated',
       matcher: /northstar-portal-backup\.iso|qBittorrent|Transfers|tracker\.opentrackr|examples/i,
       selector: 'text=/northstar-portal-backup\\.iso|qBittorrent|Transfers|tracker\\.opentrackr|examples/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
-    host: 'tas-dashboard',
-    label: 'Tas Dashboard Legacy Host',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'Legacy/private host retained in Caddy inventory; browser access is covered by the tas alias.' },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
-    host: 'tas',
-    label: 'Tas Dashboard Alias',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'tas-dashboard-authenticated',
-      matcher: /Tasmania|Live Digest|Sources|Saved|Timeline|ABC News Tasmania|Libraries Tasmania/i,
-      selector: 'text=/Tasmania|Live Digest|Sources|Saved|Timeline|ABC News Tasmania|Libraries Tasmania/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
-    host: 'tas-events',
-    label: 'Tas Events',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'tas-events-authenticated',
-      prepare: async (page) => {
-        const timelineTab = page.getByRole('button', { name: /timeline/i }).first();
-        if (await timelineTab.isVisible().catch(() => false)) {
-          await timelineTab.click({ force: true }).catch(() => {});
-          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-          await page.waitForTimeout(750);
-        }
-      },
-      matcher: /Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i,
-      selector: 'text=/Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i',
       disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },
