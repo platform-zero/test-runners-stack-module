@@ -170,7 +170,7 @@ services:
       target: "/ca"
       read_only: true
     - type: "bind"
-      source: "${TEST_RUNNER_PODMAN_SOCKET:-/run/user/999/podman/podman.sock}"
+      source: "/run/user/999/podman/podman.sock"
       target: "/run/podman/podman.sock"
     restart: "no"
     tmpfs:
@@ -346,7 +346,7 @@ services:
       target: "/ca"
       read_only: true
     - type: "bind"
-      source: "${TEST_RUNNER_PODMAN_SOCKET:-/run/user/999/podman/podman.sock}"
+      source: "/run/user/999/podman/podman.sock"
       target: "/run/podman/podman.sock"
     command:
     - "exec /container-entrypoint.sh ${TEST_RUNNER_MANAGED_COMMAND_LINE:-suite stack-contract}"
