@@ -12,10 +12,14 @@ function containerCli(): string {
 function runContainerCli(args: string[]): string {
   const cli = containerCli();
   const env = { ...process.env };
+  const cliArgs = [...args];
   if (cli === 'podman' && !env.CONTAINER_HOST) {
     env.CONTAINER_HOST = 'unix:///run/podman/podman.sock';
   }
-  return execFileSync(cli, args, {
+  if (cli === 'podman' && env.CONTAINER_HOST) {
+    cliArgs.unshift('--remote');
+  }
+  return execFileSync(cli, cliArgs, {
     encoding: 'utf-8',
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

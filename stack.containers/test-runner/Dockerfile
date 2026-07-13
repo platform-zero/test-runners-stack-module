@@ -36,7 +36,7 @@ RUN docker compose version
 RUN podman --version
 
 RUN id -u pwuser >/dev/null 2>&1 && \
-    groupadd -f docker && usermod -aG docker pwuser
+    groupadd -f docker && usermod -aG docker,root pwuser
 
 RUN mkdir -p /etc/docker && \
     echo '{"insecure-registries": ["registry.example.invalid:5000", "registry:5000", "isolated-registry:5000"], "dns": ["127.0.0.11"]}' > /etc/docker/daemon.json
