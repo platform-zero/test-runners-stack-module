@@ -12,6 +12,13 @@ require_container_health() {
   if [ "${TEST_RUNNER_SKIP_SERVICE_PREFLIGHT:-0}" = "1" ]; then
     return 0
   fi
+  if [ "$service_name" = "caddy" ]; then
+    if getent hosts host.containers.internal >/dev/null 2>&1; then
+      return 0
+    fi
+    printf 'missing:%s\n' "$service_name"
+    return 1
+  fi
   if ! getent hosts "$service_name" >/dev/null 2>&1; then
     printf 'missing:%s\n' "$service_name"
     return 1
