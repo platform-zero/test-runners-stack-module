@@ -9,7 +9,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 COPY --from=temurin21 /opt/java/openjdk /opt/java/openjdk
 
-# Install base utilities, SSH, and gosu for privilege dropping.
+# Install base utilities, Docker, SSH, and gosu for privilege dropping.
 RUN apt-get update && apt-get install -y \
     bash \
     curl \
@@ -21,7 +21,23 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     openssh-client \
     gosu \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+    && chmod a+r /etc/apt/keyrings/docker.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
+
+RUN docker compose version
+
+RUN id -u pwuser >/dev/null 2>&1 && \
+    groupadd -f docker && usermod -aG docker pwuser
+
+RUN mkdir -p /etc/docker && \
+    echo '{"insecure-registries": ["registry.example.invalid:5000", "registry:5000", "isolated-registry:5000"], "dns": ["127.0.0.11"]}' > /etc/docker/daemon.json
 
 WORKDIR /app
 
@@ -31,8 +47,13 @@ COPY --chown=pwuser:pwuser stack.containers/test-runner/playwright-tests/package
 RUN mkdir -p /app/repo-fixtures /app/stack.containers/test-runner /app/stack.containers && \
     mkdir -p /app/test-results && \
     chown -R pwuser:pwuser /app && \
+    mkdir -p /home/pwuser/.docker/buildx && \
+    touch /home/pwuser/.docker/config.json && \
+    chown -R pwuser:pwuser /home/pwuser/.docker && \
+    chmod -R 755 /home/pwuser/.docker && \
     true
 
+ENV DOCKER_CONFIG=/home/pwuser/.docker
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
