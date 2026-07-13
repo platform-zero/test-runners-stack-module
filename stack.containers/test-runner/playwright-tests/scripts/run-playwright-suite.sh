@@ -212,14 +212,6 @@ run_group() {
         services+=(jupyterhub)
         hosts="${hosts},jupyterhub"
       fi
-      if component_selected autobattler; then
-        services+=(autobattler)
-        hosts="${hosts},autobattler"
-      fi
-      if component_selected tas-dashboard; then
-        services+=(tas-dashboard)
-        hosts="${hosts},tas,tas-events"
-      fi
       require_services "${services[@]}"
       run_specs "$hosts" tests/visual/smoke-visual.spec.ts
       ;;

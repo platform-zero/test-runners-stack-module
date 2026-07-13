@@ -141,62 +141,6 @@
       ]
     },
     {
-      "slug": "tas-events",
-      "name": "TAS Events",
-      "host": "tas-events",
-      "features": [
-        {
-          "id": "map-list",
-          "title": "Map and Event List",
-          "path": "/",
-          "expectedText": [
-            "Tasmania",
-            "Events"
-          ],
-          "operatorValue": "Shows planning data in a compact dashboard."
-        },
-        {
-          "id": "event-detail",
-          "title": "Event Detail",
-          "path": "/",
-          "actions": [
-            {
-              "type": "clickFirst",
-              "selector": "article, [data-testid*=event], button, a",
-              "optional": true
-            }
-          ],
-          "expectedText": [
-            "Hobart",
-            "Source",
-            "Open"
-          ],
-          "operatorValue": "Shows how a user can inspect one event before acting."
-        },
-        {
-          "id": "saved-planning",
-          "title": "Saved Planning",
-          "path": "/",
-          "expectedText": [
-            "Saved",
-            "Timeline"
-          ],
-          "operatorValue": "Shows planning and shortlist behavior."
-        },
-        {
-          "id": "source-status",
-          "title": "Source and Refresh Status",
-          "path": "/",
-          "expectedText": [
-            "Sources",
-            "Review",
-            "Live Digest"
-          ],
-          "operatorValue": "Shows data freshness and operational status."
-        }
-      ]
-    },
-    {
       "slug": "search-service",
       "name": "OpenSearch",
       "host": "search",
@@ -975,56 +919,6 @@
             "Options..."
           ],
           "operatorValue": "Shows policy/configuration surface for network and storage behavior."
-        }
-      ]
-    },
-    {
-      "slug": "autobattler",
-      "name": "Autobattler",
-      "host": "autobattler",
-      "features": [
-        {
-          "id": "game-board",
-          "title": "Game Board",
-          "path": "/",
-          "expectedText": [
-            "unit",
-            "enemy"
-          ],
-          "operatorValue": "Shows the live playable app surface."
-        },
-        {
-          "id": "team-builder",
-          "title": "Team Builder",
-          "path": "/",
-          "expectedText": [
-            "DEPLOYMENT",
-            "ENEMY LINE",
-            "unit"
-          ],
-          "operatorValue": "Shows user strategy and configuration surfaces."
-        },
-        {
-          "id": "fight-result",
-          "title": "Fight Result",
-          "path": "/",
-          "actions": [
-            {
-              "type": "clickText",
-              "text": "FIGHT",
-              "optional": true
-            },
-            {
-              "type": "wait",
-              "ms": 1000
-            }
-          ],
-          "expectedText": [
-            "FOREMAN",
-            "enemy",
-            "FIGHT"
-          ],
-          "operatorValue": "Shows interactive feedback and game loop."
         }
       ]
     },
