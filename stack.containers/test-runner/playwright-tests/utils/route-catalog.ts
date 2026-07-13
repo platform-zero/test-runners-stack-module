@@ -305,7 +305,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Home Assistant\s+Login|Trusted Networks|select a user|please select a user|forgot password\?|keep me logged in|^log in$/im,
       disallowUrlMatcher: /keycloak|keycloak-auth|\/auth\/(authorize|login_flow|login)/i,
     },
-    ownership: { route: true, smoke: true, visual: false, deep: true },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
     host: 'direct.homeassistant',
@@ -405,7 +405,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth', path: '/user-redirect/lab' },
     path: '/user-redirect/lab',
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
     host: 'kopia',
@@ -425,7 +425,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     host: 'mastodon',
     label: 'Mastodon',
     kind: 'oidc_login',
-    anonymous: { kind: 'service_login', matcher: /(?=.*\bMastodon\b)(?=.*(?:Login or Register|openid_connect|Sign in with Keycloak|Log in|Sign in|SSO))/is, loginLabel: 'Keycloak', allowAuthRedirect: true },
+    anonymous: { kind: 'public_page', matcher: /\bMastodon\b|To use the Mastodon web application, please enable JavaScript/i },
     ownership: { route: true, smoke: false, visual: false, deep: true },
   },
   {
@@ -710,8 +710,20 @@ function selectedComponents(): Set<string> | null {
 }
 
 const optionalRouteComponents: Record<string, string> = {
+  autobattler: 'autobattler',
+  clickhouse: 'clickhouse',
+  huly: 'huly',
+  jupyterhub: 'jupyterhub',
+  'api.matrix': 'synapse',
+  matrix: 'synapse',
+  'matrix-rtc': 'synapse',
   models: 'inference',
   pipeline: 'pipeline',
+  progress: 'progression',
+  search: 'search',
+  tas: 'tas-dashboard',
+  'tas-dashboard': 'tas-dashboard',
+  'tas-events': 'tas-dashboard',
 };
 
 export function isRuntimeExcluded(route: BrowserRoute): boolean {

@@ -208,7 +208,7 @@
           "actions": [
             {
               "type": "searchServiceQuery",
-              "value": "docker compose healthcheck",
+              "value": "podman systemd healthcheck",
               "mode": "bm25"
             }
           ],
@@ -219,13 +219,13 @@
           "operatorValue": "Shows the knowledge-search entry point with a real example query."
         },
         {
-          "id": "compose-query",
-          "title": "Docker Compose Query",
+          "id": "runtime-query",
+          "title": "Podman Runtime Query",
           "path": "/",
           "actions": [
             {
               "type": "searchServiceQuery",
-              "value": "docker compose healthcheck",
+              "value": "podman systemd healthcheck",
               "mode": "bm25"
             }
           ],

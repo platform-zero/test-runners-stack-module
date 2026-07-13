@@ -71,7 +71,6 @@ x-test-base: &test_runner_base
     MASTODON_PASSWORD: ${STACK_ADMIN_PASSWORD}
     MASTODON_API_TOKEN: ${STACK_ADMIN_PASSWORD}
     MASTODON_HOST_HEADER: mastodon.${DOMAIN}
-    DOCKER_HOST: tcp://docker-socket-controller-proxy:2375
     MARIADB_HOST: mariadb
     MARIADB_PORT: 3306
     MARIADB_USER: bookstack
@@ -121,7 +120,6 @@ services:
       - ai
       - caddy
       - default
-      - docker-controller
       - internet
       - mailserver
       - mariadb
@@ -163,7 +161,6 @@ services:
       - ai
       - caddy
       - default
-      - docker-controller
       - internet
       - mailserver
       - mariadb

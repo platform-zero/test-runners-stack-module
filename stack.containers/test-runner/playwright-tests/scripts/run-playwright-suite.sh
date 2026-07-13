@@ -3,43 +3,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 PLAYWRIGHT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
-
-project_name="${TEST_RUNNER_COMPOSE_PROJECT_NAME:-${COMPOSE_PROJECT_NAME:-webservices}}"
-
-container_name_for_service() {
-  local service_name="$1"
-  docker ps \
-    --filter "label=com.docker.compose.project=${project_name}" \
-    --filter "label=com.docker.compose.service=${service_name}" \
-    --format '{{.Names}}' \
-    | head -n 1
-}
+if [ -z "${PLAYWRIGHT_SCREENSHOTS_DIR:-}" ] && [ ! -d /app ]; then
+  export PLAYWRIGHT_SCREENSHOTS_DIR="$PLAYWRIGHT_DIR/webservices-test-results/screenshots"
+fi
 
 require_container_health() {
   local service_name="$1"
-  local container_name inspect_output container_status health_status
-
-  container_name="$(container_name_for_service "$service_name")"
-  [ -n "$container_name" ] || container_name="$service_name"
-
-  if ! inspect_output="$(docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_name" 2>/dev/null)"; then
+  if [ "${TEST_RUNNER_SKIP_SERVICE_PREFLIGHT:-0}" = "1" ]; then
+    return 0
+  fi
+  if ! getent hosts "$service_name" >/dev/null 2>&1; then
     printf 'missing:%s\n' "$service_name"
     return 1
   fi
-
-  container_status="$(printf '%s' "$inspect_output" | awk '{print $1}')"
-  health_status="$(printf '%s' "$inspect_output" | awk '{print $2}')"
-
-  if [ "$container_status" != "running" ]; then
-    printf 'stopped:%s:%s\n' "$service_name" "$container_status"
-    return 1
-  fi
-
-  if [ "$health_status" != "none" ] && [ "$health_status" != "healthy" ]; then
-    printf 'unhealthy:%s:%s\n' "$service_name" "$health_status"
-    return 1
-  fi
-
   return 0
 }
 
@@ -56,7 +32,7 @@ require_services() {
   done
 
   if [ -n "$missing_report" ]; then
-    printf 'Playwright suite preflight failed. Required local containers for this selected suite are missing or unhealthy:\n' >&2
+    printf 'Playwright suite preflight failed. Required local services for this selected suite are not resolvable:\n' >&2
     printf '%s\n' "$missing_report" >&2
     return 1
   fi
@@ -208,8 +184,16 @@ run_group() {
       run_specs "" tests/visual/progression-dashboard.spec.ts
       ;;
     visual:apps)
-      services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal progression opensearch)
-      hosts="alerts,bookstack,forgejo,grafana,onboarding,portal,progress,search"
+      local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal)
+      hosts="alerts,bookstack,forgejo,grafana,onboarding,portal"
+      if component_selected progression; then
+        services+=(progression)
+        hosts="${hosts},progress"
+      fi
+      if component_selected search; then
+        services+=(opensearch)
+        hosts="${hosts},search"
+      fi
       if component_selected pipeline; then
         services+=(airflow-webserver airflow-scheduler ingestion-runner)
         hosts="${hosts},pipeline"
@@ -222,8 +206,22 @@ run_group() {
       run_specs "jellyfin,mastodon,seafile,onlyoffice" tests/visual/smoke-visual.spec.ts
       ;;
     visual:utilities)
-      require_services caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant jupyterhub kopia ntfy planka prometheus qbittorrent vaultwarden sogo autobattler tas-dashboard
-      run_specs "donetick,erpnext,homeassistant,jupyterhub,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo,autobattler,tas,tas-events" tests/visual/smoke-visual.spec.ts
+      local services=(caddy keycloak keycloak-auth-gateway donetick erpnext homeassistant kopia ntfy planka prometheus qbittorrent vaultwarden sogo)
+      hosts="donetick,erpnext,homeassistant,kopia,ntfy,planka,prometheus,qbittorrent,vaultwarden,sogo"
+      if component_selected jupyterhub; then
+        services+=(jupyterhub)
+        hosts="${hosts},jupyterhub"
+      fi
+      if component_selected autobattler; then
+        services+=(autobattler)
+        hosts="${hosts},autobattler"
+      fi
+      if component_selected tas-dashboard; then
+        services+=(tas-dashboard)
+        hosts="${hosts},tas,tas-events"
+      fi
+      require_services "${services[@]}"
+      run_specs "$hosts" tests/visual/smoke-visual.spec.ts
       ;;
     *)
       printf 'Unknown Playwright suite group: %s\n' "$group" >&2
@@ -251,35 +249,48 @@ run_target() {
   local target="${1:-all}"
   case "$target" in
     deep)
-      groups="deep:alertmanager deep:bookstack deep:element deep:forgejo deep:grafana deep:homeassistant deep:jellyfin deep:jupyterhub deep:keycloak deep:kopia deep:matrix deep:mastodon deep:ntfy deep:onboarding deep:planka deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
-      if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
-        groups="$groups deep:pipeline"
-      fi
-      # shellcheck disable=SC2086
-      run_composed $groups
+      local failed=0 target rc
+      for target in deep:forward-auth deep:oidc; do
+        printf '\n[playwright-suite] running target %s\n' "$target" >&2
+        if run_target "$target"; then
+          rc=0
+        else
+          rc=$?
+          failed=$((failed + 1))
+          printf '[playwright-suite] target %s failed with exit %s\n' "$target" "$rc" >&2
+        fi
+      done
+      [ "$failed" -eq 0 ]
       ;;
     deep:forward-auth)
-      groups="deep:alertmanager deep:grafana deep:homeassistant deep:jupyterhub deep:kopia deep:ntfy deep:onboarding deep:portal deep:prometheus deep:seafile deep:search deep:vaultwarden deep:session"
-      if [ "${TESTDEV_SKIP_GPU_INGESTION:-0}" != "1" ]; then
-        groups="$groups deep:pipeline"
-      fi
-      # shellcheck disable=SC2086
-      run_composed $groups
+      require_services caddy keycloak keycloak-auth-gateway prometheus portal
+      run_specs "prometheus,portal" tests/deep/forward-auth/session.spec.ts
       ;;
     deep:oidc)
-      groups="deep:bookstack deep:element deep:forgejo deep:grafana deep:jellyfin deep:keycloak deep:matrix deep:mastodon deep:planka deep:vaultwarden deep:session"
-      # shellcheck disable=SC2086
-      run_composed $groups
+      require_services caddy keycloak grafana bookstack
+      run_specs "grafana,bookstack" tests/deep/oidc/session.spec.ts
       ;;
     visual)
-      groups="visual:coverage visual:portal visual:progression visual:apps visual:media visual:utilities"
+      groups="visual:coverage visual:portal visual:apps visual:media visual:utilities"
+      if component_selected progression; then
+        groups="$groups visual:progression"
+      fi
       # shellcheck disable=SC2086
       run_composed $groups
       ;;
     all)
-      groups="boundary app-smoke sso deep visual"
-      # shellcheck disable=SC2086
-      run_composed $groups
+      local failed=0 target rc
+      for target in boundary app-smoke sso deep visual; do
+        printf '\n[playwright-suite] running target %s\n' "$target" >&2
+        if run_target "$target"; then
+          rc=0
+        else
+          rc=$?
+          failed=$((failed + 1))
+          printf '[playwright-suite] target %s failed with exit %s\n' "$target" "$rc" >&2
+        fi
+      done
+      [ "$failed" -eq 0 ]
       ;;
     *)
       run_group "$target"

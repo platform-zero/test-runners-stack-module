@@ -7,9 +7,7 @@ TEST_USER_HOME="/home/${TEST_USER}"
 PLAYWRIGHT_DIR="/app/playwright-tests"
 RESULTS_DIR="/app/test-results"
 PLAYWRIGHT_RESULTS_DIR="${RESULTS_DIR}/playwright"
-DEFAULT_CADDY_CONTAINER="caddy"
-DEFAULT_CADDY_CERT_PATH="/certs/pki/authorities/local/root.crt"
-FALLBACK_CADDY_CERT_PATH="/data/caddy/pki/authorities/local/root.crt"
+DEFAULT_CADDY_CA_PATH="/ca/caddy-ca.crt"
 CADDY_CA_ALIAS="caddy-local-root"
 CADDY_CA_TARGET="/usr/local/share/ca-certificates/${CADDY_CA_ALIAS}.crt"
 NSSDB_DIR="${TEST_USER_HOME}/.pki/nssdb"
@@ -33,66 +31,21 @@ copy_tree() {
 }
 
 bootstrap_caddy_ca() {
-    local caddy_container="${CADDY_CONTAINER:-$DEFAULT_CADDY_CONTAINER}"
-    local preferred_caddy_cert_path="${CADDY_CERT_PATH:-$DEFAULT_CADDY_CERT_PATH}"
-    local docker_names
-    local tmp_cert
-    local candidate_paths=()
-    local candidate_path
+    local source_cert="${CADDY_CA_PATH:-$DEFAULT_CADDY_CA_PATH}"
     local attempt
     local max_attempts="${CADDY_CA_BOOTSTRAP_ATTEMPTS:-20}"
     local sleep_seconds="${CADDY_CA_BOOTSTRAP_SLEEP_SECONDS:-1}"
 
-    if ! command -v docker >/dev/null 2>&1; then
-        log "Docker CLI is unavailable; skipping Caddy CA bootstrap"
-        return 0
-    fi
-
-    docker_names="$(docker ps --format '{{.Names}}' 2>/dev/null || true)"
-    if ! printf '%s\n' "$docker_names" | grep -qx "$caddy_container"; then
-        log "Caddy container '$caddy_container' is not running; skipping CA bootstrap"
-        return 0
-    fi
-
-    candidate_paths+=("$preferred_caddy_cert_path")
-    if [ "$preferred_caddy_cert_path" != "$FALLBACK_CADDY_CERT_PATH" ]; then
-        candidate_paths+=("$FALLBACK_CADDY_CERT_PATH")
-    fi
-
-    tmp_cert="$(mktemp)"
     for attempt in $(seq 1 "$max_attempts"); do
-        for candidate_path in "${candidate_paths[@]}"; do
-            if docker cp "${caddy_container}:${candidate_path}" "$tmp_cert" >/dev/null 2>&1; then
-                install -m 0644 "$tmp_cert" "$CADDY_CA_TARGET"
-                rm -f "$tmp_cert"
-
-                update-ca-certificates >/dev/null 2>&1 || true
-                bootstrap_nss_caddy_ca || true
-
-                if command -v keytool >/dev/null 2>&1; then
-                    if ! keytool -list -cacerts -storepass changeit -alias "$CADDY_CA_ALIAS" >/dev/null 2>&1; then
-                        keytool -importcert -noprompt -trustcacerts \
-                            -alias "$CADDY_CA_ALIAS" \
-                            -file "$CADDY_CA_TARGET" \
-                            -cacerts \
-                            -storepass changeit >/dev/null 2>&1 || true
-                    fi
-                fi
-
-                return 0
-            fi
-        done
+        [ -s "$source_cert" ] && break
         sleep "$sleep_seconds"
     done
-
-    if ! docker exec "$caddy_container" sh -lc 'wget -qO- http://127.0.0.1:2019/pki/ca/local/certificates' > "$tmp_cert" 2>/dev/null; then
-        rm -f "$tmp_cert"
-        log "Unable to copy or fetch Caddy CA from ${caddy_container}; continuing without bootstrap"
+    if [ ! -s "$source_cert" ]; then
+        log "Caddy CA is unavailable at $source_cert; continuing without bootstrap"
         return 0
     fi
 
-    install -m 0644 "$tmp_cert" "$CADDY_CA_TARGET"
-    rm -f "$tmp_cert"
+    install -m 0644 "$source_cert" "$CADDY_CA_TARGET"
 
     update-ca-certificates >/dev/null 2>&1 || true
     bootstrap_nss_caddy_ca || true
@@ -131,7 +84,6 @@ run_as_test_user() {
             HOME="$TEST_USER_HOME" \
             USER="$TEST_USER" \
             LOGNAME="$TEST_USER" \
-            DOCKER_CONFIG="$TEST_USER_HOME/.docker" \
             NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$CADDY_CA_TARGET}" \
             SSL_CERT_FILE="${SSL_CERT_FILE:-$CADDY_CA_TARGET}" \
             REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$CADDY_CA_TARGET}" \
@@ -143,7 +95,6 @@ run_as_test_user() {
         HOME="$TEST_USER_HOME" \
         USER="$TEST_USER" \
         LOGNAME="$TEST_USER" \
-        DOCKER_CONFIG="$TEST_USER_HOME/.docker" \
         "$@"
 }
 
@@ -153,7 +104,6 @@ exec_as_test_user() {
             HOME="$TEST_USER_HOME" \
             USER="$TEST_USER" \
             LOGNAME="$TEST_USER" \
-            DOCKER_CONFIG="$TEST_USER_HOME/.docker" \
             NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$CADDY_CA_TARGET}" \
             SSL_CERT_FILE="${SSL_CERT_FILE:-$CADDY_CA_TARGET}" \
             REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$CADDY_CA_TARGET}" \
@@ -164,7 +114,6 @@ exec_as_test_user() {
         HOME="$TEST_USER_HOME" \
         USER="$TEST_USER" \
         LOGNAME="$TEST_USER" \
-        DOCKER_CONFIG="$TEST_USER_HOME/.docker" \
         "$@"
 }
 

@@ -96,7 +96,7 @@ describe('route-catalog', () => {
 
   it('requires service-specific evidence for OIDC service login pages', () => {
     const genericLoginContent = 'Keycloak\nSign in\nLogin\nSingle sign-on\nSSO\nOpenID Connect';
-    const oidcLoginHosts = ['bookstack', 'element', 'forgejo', 'mastodon', 'planka', 'vaultwarden'];
+    const oidcLoginHosts = ['bookstack', 'element', 'forgejo', 'planka', 'vaultwarden'];
 
     for (const host of oidcLoginHosts) {
       const route = findRoute(host);

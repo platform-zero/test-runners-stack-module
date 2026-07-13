@@ -19,19 +19,10 @@ test.use({ storageState: authenticatedSessionState });
     test.setTimeout(120000);
     console.log('\n🧪 Testing session persistence across services');
 
-    // Visit multiple services in sequence - should not require re-auth
+    // Visit multiple active forward-auth services in sequence - should not require re-auth.
+    // JupyterHub is still a compose-only module in the Podman refactor and is
+    // intentionally excluded until it has a generated Podman service.
     const services = [
-      {
-        name: 'JupyterHub',
-        path: serviceUrl('jupyterhub', '/user-redirect/lab'),
-        pattern: /JupyterHub|Start My Server|Control Panel|JupyterLab|Notebook|Files|New/i,
-        options: {
-          waitForUrlNotMatch: /\/spawn-pending\//i,
-          waitForSelectorVisible: 'text=/Start My Server|Control Panel|Files|Notebook|JupyterLab/i',
-          waitForSelectorTimeoutMs: 30000,
-          skipScreenshot: true,
-        },
-      },
       {
         name: 'Prometheus',
         path: serviceUrl('prometheus'),
