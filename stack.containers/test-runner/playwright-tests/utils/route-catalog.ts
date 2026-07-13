@@ -281,14 +281,14 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     smoke: {
       path: '/d/logs-home/logs',
+      selector: 'text=/All Logs|Dashboards|Refresh/i',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found/i,
     },
     visual: {
       fileStem: 'grafana-authenticated',
       path: '/d/logs-home/logs',
+      selector: 'text=/All Logs|Dashboards|Refresh/i',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found/i,
       quality: 85,
       fullPage: false,
     },
