@@ -14,6 +14,7 @@ x-test-base: &test_runner_base
   environment:
     TEST_SUITE_NAME: stack-contract
     TEST_RUNNER_RUNTIME_ROOT: /runtime
+    TEST_RUNNER_COMPONENTS_LOCK_FILE: /component-lock/components.lock.json
     TEST_RUNNER_COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:-webservices}
     TESTDEV_SKIP_GPU_INGESTION: ${TESTDEV_SKIP_GPU_INGESTION:-0}
     CADDY_CONTAINER: ${CADDY_CONTAINER:-caddy}
@@ -68,7 +69,7 @@ x-test-base: &test_runner_base
     PLANKA_PASSWORD: ${STACK_ADMIN_PASSWORD}
     MASTODON_EMAIL: ${STACK_ADMIN_EMAIL}
     MASTODON_PASSWORD: ${STACK_ADMIN_PASSWORD}
-    MASTODON_API_TOKEN: ${STACK_ADMIN_PASSWORD}
+    MASTODON_API_TOKEN: ${MASTODON_API_TOKEN}
     MASTODON_HOST_HEADER: mastodon.${DOMAIN}
     DOCKER_HOST: tcp://docker-socket-controller-proxy:2375
     MARIADB_HOST: mariadb
@@ -110,6 +111,10 @@ services:
         target: /runtime
         read_only: true
       - type: bind
+        source: ${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE:?TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE must be set by run-tests.sh}
+        target: /component-lock/components.lock.json
+        read_only: true
+      - type: bind
         source: ${TEST_RUNNER_HOST_XDG_RUNTIME_DIR:?TEST_RUNNER_HOST_XDG_RUNTIME_DIR must be set by run-tests.sh}
         target: /host-user-runtime
     networks:
@@ -146,6 +151,10 @@ services:
       - type: bind
         source: ${TEST_RUNNER_RUNTIME_HOST_DIR:?TEST_RUNNER_RUNTIME_HOST_DIR must be set by run-tests.sh}
         target: /runtime
+        read_only: true
+      - type: bind
+        source: ${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE:?TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE must be set by run-tests.sh}
+        target: /component-lock/components.lock.json
         read_only: true
       - type: bind
         source: ${TEST_RUNNER_HOST_XDG_RUNTIME_DIR:?TEST_RUNNER_HOST_XDG_RUNTIME_DIR must be set by run-tests.sh}

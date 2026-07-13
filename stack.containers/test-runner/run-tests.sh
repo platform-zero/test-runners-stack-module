@@ -35,6 +35,7 @@ DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_COMPOSE_PROJECT_NAME="${DEFAULT_COMPOSE_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$DEFAULT_COMPOSE_PROJECT_NAME}"
+TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-docker}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -147,6 +148,10 @@ print_usage() {
     echo ""
 }
 
+container_cli() {
+    printf '%s\n' "$TEST_RUNNER_CONTAINER_CLI"
+}
+
 ensure_compose_artifacts() {
     if [ ! -f "$PRIMARY_COMPOSE_FILE" ]; then
         echo -e "${RED}Error:${NC} Compose file not found: $PRIMARY_COMPOSE_FILE" >&2
@@ -173,10 +178,10 @@ resolve_workspace_mount_source() {
     local source=""
 
     [ -n "$container_id" ] || return 1
-    command -v docker >/dev/null 2>&1 || return 1
+    command -v "$(container_cli)" >/dev/null 2>&1 || return 1
 
     source="$(
-        docker inspect "$container_id" \
+        "$(container_cli)" inspect "$container_id" \
             --format "{{range .Mounts}}{{if eq .Destination \"$workspace_root\"}}{{println .Source}}{{end}}{{end}}" \
             2>/dev/null | head -n 1
     )"
@@ -240,6 +245,34 @@ resolve_test_runner_runtime_host_dir() {
     )
 }
 
+resolve_test_runner_components_lock_host_file() {
+    local explicit="${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE_OVERRIDE:-${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE:-}}"
+    if [ -n "$explicit" ]; then
+        printf '%s\n' "$explicit"
+        return 0
+    fi
+
+    local candidates=(
+        "$DIST_DIR/site/components.lock.json"
+        "$(dirname "$DIST_DIR")/build/site/components.lock.json"
+        "$COMPOSE_PROJECT_DIR/build/site/components.lock.json"
+        "$COMPOSE_PROJECT_DIR/site/components.lock.json"
+    )
+
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            (
+                cd "$(dirname "$candidate")"
+                printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")"
+            )
+            return 0
+        fi
+    done
+
+    printf '%s\n' "/dev/null"
+}
+
 resolve_test_runner_systemd_runtime_host_dir() {
     local runtime_dir="${TEST_RUNNER_HOST_XDG_RUNTIME_DIR_OVERRIDE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}}"
 
@@ -261,8 +294,11 @@ resolve_test_runner_systemd_runtime_host_dir() {
 
 docker_compose() {
     ensure_compose_artifacts
+    local components_lock_file
+    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     TEST_RESULTS_HOST_DIR="$(resolve_test_results_host_dir)" \
     TEST_RUNNER_RUNTIME_HOST_DIR="$(resolve_test_runner_runtime_host_dir)" \
+    TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE="$components_lock_file" \
     TEST_RUNNER_HOST_XDG_RUNTIME_DIR="$(resolve_test_runner_systemd_runtime_host_dir)" \
     docker compose \
         --env-file "$RUNTIME_ENV_FILE" \
@@ -284,9 +320,9 @@ managed_runner_container_name() {
 purge_managed_runner_container() {
     local container_name
     container_name="$(managed_runner_container_name)"
-    if docker inspect "$container_name" >/dev/null 2>&1; then
+    if "$(container_cli)" inspect "$container_name" >/dev/null 2>&1; then
         echo "Removing stale managed runner container: $container_name" >&2
-        docker rm -f "$container_name" >/dev/null 2>&1 || true
+        "$(container_cli)" rm -f "$container_name" >/dev/null 2>&1 || true
     fi
 }
 
@@ -296,7 +332,7 @@ print_managed_runner_failure_diagnostics() {
     container_name="$(managed_runner_container_name)"
 
     if ! inspect_output="$(
-        docker inspect "$container_name" \
+        "$(container_cli)" inspect "$container_name" \
             --format '{{.State.Status}}|{{.State.Error}}|{{.State.OOMKilled}}|{{.State.FinishedAt}}' \
             2>/dev/null
     )"; then
@@ -331,11 +367,11 @@ repair_dir_ownership() {
 
     uid="$(id -u 2>/dev/null || true)"
     gid="$(id -g 2>/dev/null || true)"
-    if [ -z "$uid" ] || [ -z "$gid" ] || ! command -v docker >/dev/null 2>&1; then
+    if [ -z "$uid" ] || [ -z "$gid" ] || ! command -v "$(container_cli)" >/dev/null 2>&1; then
         return 1
     fi
 
-    docker run --rm -v "$target:/target" alpine sh -lc "chown -R $uid:$gid /target && chmod -R u+rwX /target" >/dev/null 2>&1
+    "$(container_cli)" run --rm -v "$target:/target" alpine sh -lc "chown -R $uid:$gid /target && chmod -R u+rwX /target" >/dev/null 2>&1
 }
 
 ensure_writable_dir() {
@@ -397,6 +433,8 @@ docker_compose_with_env() {
     shift
     local runtime_root
     runtime_root="$(resolve_test_runner_runtime_host_dir)"
+    local components_lock_file
+    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     local systemd_runtime_root
     systemd_runtime_root="$(resolve_test_runner_systemd_runtime_host_dir)"
     local env_assignments=()
@@ -408,7 +446,7 @@ docker_compose_with_env() {
         shift
     fi
 
-    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" docker compose \
+    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" docker compose \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$COMPOSE_PROJECT_DIR" \
         -f "$PRIMARY_COMPOSE_FILE" \
@@ -474,7 +512,7 @@ run_runner_no_build() {
 
     if [ "$status" -ne 0 ] && [ "$TEST_RUNNER_KEEP_FAILED_CONTAINER" = "1" ]; then
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
-        echo "Inspect with: docker inspect $(managed_runner_container_name)" >&2
+        echo "Inspect with: $(container_cli) inspect $(managed_runner_container_name)" >&2
     else
         docker_compose_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
             "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \

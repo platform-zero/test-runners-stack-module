@@ -2,46 +2,173 @@
   "schemaVersion": 1,
   "policy": "The test-runners module owns Playwright harness code, route-catalog smoke coverage, and cross-service stack behavior. Single-service deep, boundary, or visual specs are supplied by the owning service module at the same final bundle path.",
   "specs": {
-    "tests/deep/forward-auth/alertmanager.spec.ts": { "owner": "alertmanager", "source": "module" },
-    "tests/deep/forward-auth/grafana.spec.ts": { "owner": "grafana", "source": "module" },
-    "tests/deep/forward-auth/homeassistant.spec.ts": { "owner": "homeassistant", "source": "module" },
-    "tests/deep/forward-auth/homepage.spec.ts": { "owner": "portal", "source": "module" },
-    "tests/deep/forward-auth/jupyterhub.spec.ts": { "owner": "jupyterhub", "source": "module" },
-    "tests/deep/forward-auth/kopia.spec.ts": { "owner": "kopia", "source": "module" },
-    "tests/deep/forward-auth/non-browser-api-endpoints.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "cross-service API SSO boundary" },
-    "tests/deep/forward-auth/ntfy.spec.ts": { "owner": "ntfy", "source": "module" },
-    "tests/deep/forward-auth/onboarding-self-service.spec.ts": { "owner": "onboarding", "source": "module" },
-    "tests/deep/forward-auth/onboarding.spec.ts": { "owner": "onboarding", "source": "module" },
-    "tests/deep/forward-auth/pipeline.spec.ts": { "owner": "pipeline", "source": "module" },
-    "tests/deep/forward-auth/prometheus.spec.ts": { "owner": "prometheus", "source": "module" },
-    "tests/deep/forward-auth/seafile.spec.ts": { "owner": "seafile", "source": "module" },
-    "tests/deep/forward-auth/search.spec.ts": { "owner": "opensearch", "source": "module" },
-    "tests/deep/forward-auth/session.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "cross-service session continuity" },
-    "tests/deep/forward-auth/vault.spec.ts": { "owner": "vaultwarden", "source": "module" },
-    "tests/deep/forward-auth/vaultwarden-boundary.spec.ts": { "owner": "vaultwarden", "source": "module" },
-    "tests/deep/oidc/bookstack.spec.ts": { "owner": "bookstack", "source": "module" },
-    "tests/deep/oidc/element-call-livekit.spec.ts": { "owner": "element", "source": "module" },
-    "tests/deep/oidc/element.spec.ts": { "owner": "element", "source": "module" },
-    "tests/deep/oidc/forgejo.spec.ts": { "owner": "forgejo", "source": "module" },
-    "tests/deep/oidc/grafana.spec.ts": { "owner": "grafana", "source": "module" },
-    "tests/deep/oidc/jellyfin-external-api.spec.ts": { "owner": "jellyfin", "source": "module" },
-    "tests/deep/oidc/jellyfin.spec.ts": { "owner": "jellyfin", "source": "module" },
-    "tests/deep/oidc/keycloak.spec.ts": { "owner": "keycloak", "source": "module" },
-    "tests/deep/oidc/mastodon.spec.ts": { "owner": "mastodon", "source": "module" },
-    "tests/deep/oidc/matrix-authentication-service.spec.ts": { "owner": "matrix-authentication-service", "source": "module" },
-    "tests/deep/oidc/matrix-media-integrity.spec.ts": { "owner": "synapse", "source": "module" },
-    "tests/deep/oidc/planka.spec.ts": { "owner": "planka", "source": "module" },
-    "tests/deep/oidc/session.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "cross-service OIDC session continuity" },
-    "tests/deep/oidc/vaultwarden.spec.ts": { "owner": "vaultwarden", "source": "module" },
-    "tests/fast/app-smoke.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "route-catalog app smoke harness" },
-    "tests/fast/onboarding-full-account.spec.ts": { "owner": "onboarding", "source": "module" },
-    "tests/fast/onboarding-required-actions.spec.ts": { "owner": "onboarding", "source": "module" },
-    "tests/fast/onboarding-portal.spec.ts": { "owner": "onboarding", "source": "module" },
-    "tests/fast/route-contract.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "generated route contract harness" },
-    "tests/fast/sso-session.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "stack-wide SSO session harness" },
-    "tests/visual/caddy-ui-coverage.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "global Caddy route visual coverage audit" },
-    "tests/visual/portal-role-dashboards.spec.ts": { "owner": "portal", "source": "module" },
-    "tests/visual/progression-dashboard.spec.ts": { "owner": "progression", "source": "module" },
-    "tests/visual/smoke-visual.spec.ts": { "owner": "test-runners", "source": "test-runners", "reason": "route-catalog visual smoke harness" }
+    "tests/deep/forward-auth/alertmanager.spec.ts": {
+      "owner": "alertmanager",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/grafana.spec.ts": {
+      "owner": "grafana",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/homeassistant.spec.ts": {
+      "owner": "homeassistant",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/homepage.spec.ts": {
+      "owner": "portal",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/jupyterhub.spec.ts": {
+      "owner": "jupyterhub",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/kopia.spec.ts": {
+      "owner": "kopia",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/non-browser-api-endpoints.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "cross-service API SSO boundary"
+    },
+    "tests/deep/forward-auth/ntfy.spec.ts": {
+      "owner": "ntfy",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/onboarding-self-service.spec.ts": {
+      "owner": "onboarding",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/onboarding.spec.ts": {
+      "owner": "onboarding",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/pipeline.spec.ts": {
+      "owner": "pipeline",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/prometheus.spec.ts": {
+      "owner": "prometheus",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/seafile.spec.ts": {
+      "owner": "seafile",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/search.spec.ts": {
+      "owner": "opensearch",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/session.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "cross-service session continuity"
+    },
+    "tests/deep/forward-auth/vault.spec.ts": {
+      "owner": "vaultwarden",
+      "source": "module"
+    },
+    "tests/deep/forward-auth/vaultwarden-boundary.spec.ts": {
+      "owner": "vaultwarden",
+      "source": "module"
+    },
+    "tests/deep/oidc/bookstack.spec.ts": {
+      "owner": "bookstack",
+      "source": "module"
+    },
+    "tests/deep/oidc/element-call-livekit.spec.ts": {
+      "owner": "element",
+      "source": "module"
+    },
+    "tests/deep/oidc/element.spec.ts": {
+      "owner": "element",
+      "source": "module"
+    },
+    "tests/deep/oidc/forgejo.spec.ts": {
+      "owner": "forgejo",
+      "source": "module"
+    },
+    "tests/deep/oidc/grafana.spec.ts": {
+      "owner": "grafana",
+      "source": "module"
+    },
+    "tests/deep/oidc/jellyfin-external-api.spec.ts": {
+      "owner": "jellyfin",
+      "source": "module"
+    },
+    "tests/deep/oidc/jellyfin.spec.ts": {
+      "owner": "jellyfin",
+      "source": "module"
+    },
+    "tests/deep/oidc/keycloak.spec.ts": {
+      "owner": "keycloak",
+      "source": "module"
+    },
+    "tests/deep/oidc/mastodon.spec.ts": {
+      "owner": "mastodon",
+      "source": "module"
+    },
+    "tests/deep/oidc/matrix-authentication-service.spec.ts": {
+      "owner": "matrix-authentication-service",
+      "source": "module"
+    },
+    "tests/deep/oidc/matrix-media-integrity.spec.ts": {
+      "owner": "synapse",
+      "source": "module"
+    },
+    "tests/deep/oidc/planka.spec.ts": {
+      "owner": "planka",
+      "source": "module"
+    },
+    "tests/deep/oidc/session.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "cross-service OIDC session continuity"
+    },
+    "tests/deep/oidc/vaultwarden.spec.ts": {
+      "owner": "vaultwarden",
+      "source": "module"
+    },
+    "tests/fast/app-smoke.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "route-catalog app smoke harness"
+    },
+    "tests/fast/onboarding-full-account.spec.ts": {
+      "owner": "onboarding",
+      "source": "module"
+    },
+    "tests/fast/onboarding-required-actions.spec.ts": {
+      "owner": "onboarding",
+      "source": "module"
+    },
+    "tests/fast/onboarding-portal.spec.ts": {
+      "owner": "onboarding",
+      "source": "module"
+    },
+    "tests/fast/route-contract.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "generated route contract harness"
+    },
+    "tests/fast/sso-session.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "stack-wide SSO session harness"
+    },
+    "tests/visual/caddy-ui-coverage.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "global Caddy route visual coverage audit"
+    },
+    "tests/visual/portal-role-dashboards.spec.ts": {
+      "owner": "portal",
+      "source": "module"
+    },
+    "tests/visual/smoke-visual.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "route-catalog visual smoke harness"
+    }
   }
 }

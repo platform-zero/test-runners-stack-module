@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 const stackDomain = process.env.DOMAIN || 'datamancy.net';
 const ignoreHttpsErrors = process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === 'true';
+const originBypassHost = process.env.PLAYWRIGHT_ORIGIN_BYPASS_HOST?.trim();
+const hostResolverRules = originBypassHost
+  ? [`MAP ${stackDomain} ${originBypassHost}`, `MAP *.${stackDomain} ${originBypassHost}`]
+  : [];
 
 /**
  * Playwright configuration for webservices stack E2E tests
@@ -77,6 +81,7 @@ export default defineConfig({
       args: [
         '--disable-features=IsolateOrigins,site-per-process',
         '--disable-gpu',
+        ...(hostResolverRules.length > 0 ? [`--host-resolver-rules=${hostResolverRules.join(',')}`] : []),
       ],
     },
   },

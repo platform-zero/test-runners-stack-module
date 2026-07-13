@@ -7,6 +7,18 @@ import { serviceUrl, stackDomain } from '../utils/stack-urls';
 import { redactUrlForLogs } from '../utils/telemetry';
 import { KeycloakLoginPage } from '../pages/KeycloakLoginPage';
 
+function chromiumHostResolverRules(): string[] {
+  const originBypassHost = process.env.PLAYWRIGHT_ORIGIN_BYPASS_HOST?.trim();
+  if (!originBypassHost) {
+    return [];
+  }
+
+  return [
+    `MAP ${stackDomain} ${originBypassHost}`,
+    `MAP *.${stackDomain} ${originBypassHost}`,
+  ];
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (value) {
@@ -140,10 +152,13 @@ async function keycloakGlobalSetup() {
 }
 
 async function launchChromiumWithRetry() {
+  const hostResolverRules = chromiumHostResolverRules();
   const launchArgs = {
     args: [
       '--disable-features=IsolateOrigins,site-per-process',
       '--disable-gpu',
+      ...(process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === 'true' ? ['--ignore-certificate-errors'] : []),
+      ...(hostResolverRules.length > 0 ? [`--host-resolver-rules=${hostResolverRules.join(',')}`] : []),
     ],
   };
 

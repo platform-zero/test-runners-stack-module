@@ -47,7 +47,6 @@ describe('generate-screenshot-report', () => {
       buildEvidenceTargets({
         components: [
           { component: 'portal', screenshots: ['portal/authenticated', 'portal/profile-dashboard'] },
-          { component: 'progression', screenshots: ['progression/ops-cockpit'] },
         ],
       })
     );
@@ -56,7 +55,6 @@ describe('generate-screenshot-report', () => {
     expect(html).toContain('Feature Proof Screenshots');
     expect(html).toContain('Declared Feature Proof Targets');
     expect(html).toContain('portal/authenticated');
-    expect(html).toContain('progression/ops-cockpit');
   });
 
   it('collects screenshots recursively from module subdirectories', () => {

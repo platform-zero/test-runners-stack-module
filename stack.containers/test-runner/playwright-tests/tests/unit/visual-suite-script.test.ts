@@ -93,7 +93,7 @@ describe('visual suite script', () => {
 
   it('keeps visual groups free of deep service specs', () => {
     const script = fs.readFileSync(modularSuiteScript, 'utf8');
-    const visualSuites = ['visual:coverage', 'visual:portal', 'visual:progression', 'visual:apps', 'visual:media', 'visual:utilities'];
+    const visualSuites = ['visual:coverage', 'visual:portal', 'visual:apps', 'visual:media', 'visual:utilities'];
 
     for (const suiteName of visualSuites) {
       expect(suiteCaseBody(script, suiteName)).not.toContain('tests/deep/');
@@ -113,7 +113,5 @@ describe('visual suite script', () => {
     }
     const dockerfile = fs.readFileSync(managedRunnerDockerfile, 'utf8');
 
-    expect(dockerfile).not.toContain('stack.config/progression');
-    expect(dockerfile).not.toContain('stack.kotlin/progression');
   });
 });

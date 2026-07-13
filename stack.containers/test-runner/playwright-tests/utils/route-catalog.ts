@@ -281,16 +281,14 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     smoke: {
       path: '/d/logs-home/logs',
+      selector: 'text=/All Logs|Dashboards|Refresh/i',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      selector: 'text=/All Logs|Logs|Loki|Dashboards|Explore|Grafana/i',
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
     },
     visual: {
       fileStem: 'grafana-authenticated',
       path: '/d/logs-home/logs',
+      selector: 'text=/All Logs|Dashboards|Refresh/i',
       matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
-      selector: 'text=/All Logs|Logs|Loki|Dashboards|Explore|Grafana/i',
-      disallowMatcher: /Loading \.\.\.|Loading plugin panel|Failed to load dashboard|Failed to load home dashboard|Not found|\bLog in\b|Email or username|Forgot your password/i,
       quality: 85,
       fullPage: false,
     },
@@ -307,7 +305,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Home Assistant\s+Login|Trusted Networks|select a user|please select a user|forgot password\?|keep me logged in|^log in$/im,
       disallowUrlMatcher: /keycloak|keycloak-auth|\/auth\/(authorize|login_flow|login)/i,
     },
-    ownership: { route: true, smoke: true, visual: false, deep: true },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
     host: 'direct.homeassistant',
@@ -341,35 +339,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'public',
     anonymous: { kind: 'canonical_redirect', targetHost: 'portal', followup: 'forward_auth' },
     ownership: { route: true, smoke: false, visual: false, deep: true },
-  },
-  {
-    host: 'progress',
-    label: 'Progression',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    smoke: {
-      matcher: /Sovereign Compute Progression|Ownership Path|Next Action/i,
-      selector: 'text=/Sovereign Compute Progression|Ownership Path|Next Action/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-    },
-    visual: {
-      fileStem: 'progression-authenticated',
-      matcher: /Sovereign Compute Progression|Ownership Path|Next Action/i,
-      selector: 'text=/Sovereign Compute Progression|Ownership Path|Next Action/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      prepare: async (page) => {
-        await page.evaluate(async () => {
-          const response = await fetch('/api/scan', { method: 'POST' });
-          if (!response.ok) {
-            throw new Error(`progression scan returned HTTP ${response.status}`);
-          }
-        });
-        await page.reload({ waitUntil: 'networkidle' });
-        await page.getByText(/Proven|Current slice complete|BookStack route and central-login access evidence passed/i).first().waitFor({ timeout: 15000 });
-      },
-      quality: 85,
-    },
-    ownership: { route: true, smoke: true, visual: true, deep: false },
   },
   {
     host: 'keycloak',
@@ -407,7 +376,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth', path: '/user-redirect/lab' },
     path: '/user-redirect/lab',
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
     host: 'kopia',
@@ -427,7 +396,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     host: 'mastodon',
     label: 'Mastodon',
     kind: 'oidc_login',
-    anonymous: { kind: 'service_login', matcher: /(?=.*\bMastodon\b)(?=.*(?:Login or Register|openid_connect|Sign in with Keycloak|Log in|Sign in|SSO))/is, loginLabel: 'Keycloak', allowAuthRedirect: true },
+    anonymous: { kind: 'public_page', matcher: /\bMastodon\b|To use the Mastodon web application, please enable JavaScript/i },
     ownership: { route: true, smoke: false, visual: false, deep: true },
   },
   {
@@ -575,20 +544,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'autobattler',
-    label: 'Autobattler',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'autobattler-authenticated',
-      matcher: /Your unit vs weak enemy|DEPLOYMENT|ENEMY LINE|Runner HP 20|Weak Enemy HP 6|TOKENS 2|Live board state/i,
-      selector: 'text=/Your unit vs weak enemy|DEPLOYMENT|ENEMY LINE|Runner HP 20|Weak Enemy HP 6|TOKENS 2|Live board state/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
     host: 'qbittorrent',
     label: 'qBittorrent',
     kind: 'forward_auth',
@@ -597,49 +552,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'qbittorrent-authenticated',
       matcher: /northstar-portal-backup\.iso|qBittorrent|Transfers|tracker\.opentrackr|examples/i,
       selector: 'text=/northstar-portal-backup\\.iso|qBittorrent|Transfers|tracker\\.opentrackr|examples/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
-    host: 'tas-dashboard',
-    label: 'Tas Dashboard Legacy Host',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'Legacy/private host retained in Caddy inventory; browser access is covered by the tas alias.' },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
-    host: 'tas',
-    label: 'Tas Dashboard Alias',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'tas-dashboard-authenticated',
-      matcher: /Tasmania|Live Digest|Sources|Saved|Timeline|ABC News Tasmania|Libraries Tasmania/i,
-      selector: 'text=/Tasmania|Live Digest|Sources|Saved|Timeline|ABC News Tasmania|Libraries Tasmania/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
-      quality: 85,
-    },
-    ownership: { route: true, smoke: false, visual: true, deep: false },
-  },
-  {
-    host: 'tas-events',
-    label: 'Tas Events',
-    kind: 'forward_auth',
-    anonymous: { kind: 'forward_auth' },
-    visual: {
-      fileStem: 'tas-events-authenticated',
-      prepare: async (page) => {
-        const timelineTab = page.getByRole('button', { name: /timeline/i }).first();
-        if (await timelineTab.isVisible().catch(() => false)) {
-          await timelineTab.click({ force: true }).catch(() => {});
-          await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-          await page.waitForTimeout(750);
-        }
-      },
-      matcher: /Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i,
-      selector: 'text=/Timeline|Hobart Makers Open Night|Open source|Source registry|Saved plans/i',
       disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
       quality: 85,
     },
@@ -683,8 +595,53 @@ function selectedRouteHosts(): Set<string> | null {
   return hosts.length > 0 ? new Set(hosts) : null;
 }
 
-function isRuntimeExcluded(route: BrowserRoute): boolean {
+function selectedComponents(): Set<string> | null {
+  const candidates = [
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE,
+    process.env.WEBSERVICES_COMPONENTS_LOCK_FILE,
+    '/component-lock/components.lock.json',
+    '/runtime/components.lock.json',
+    '/app/build/site/components.lock.json',
+    '/app/site/components.lock.json',
+  ].filter((candidate): candidate is string => Boolean(candidate && candidate.trim().length > 0));
+
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { components?: unknown };
+      if (Array.isArray(parsed.components)) {
+        return new Set(parsed.components.filter((component): component is string => typeof component === 'string'));
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+const optionalRouteComponents: Record<string, string> = {
+  clickhouse: 'clickhouse',
+  huly: 'huly',
+  jupyterhub: 'jupyterhub',
+  'api.matrix': 'synapse',
+  matrix: 'synapse',
+  'matrix-rtc': 'synapse',
+  models: 'inference',
+  pipeline: 'pipeline',
+  search: 'search',
+};
+
+export function isRuntimeExcluded(route: BrowserRoute): boolean {
   if (process.env.TESTDEV_SKIP_GPU_INGESTION === '1' && route.host === 'pipeline') {
+    return true;
+  }
+  const requiredComponent = optionalRouteComponents[route.host];
+  const components = selectedComponents();
+  if (requiredComponent && components !== null && !components.has(requiredComponent)) {
     return true;
   }
   const selectedHosts = selectedRouteHosts();

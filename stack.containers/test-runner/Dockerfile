@@ -10,7 +10,7 @@ ENV PATH="${JAVA_HOME}/bin:${PATH}"
 COPY --from=temurin21 /opt/java/openjdk /opt/java/openjdk
 
 # Install base utilities, Docker, SSH, and gosu for privilege dropping.
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     curl \
     jq \
@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y \
     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
     tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update \
-    && apt-get install -y docker-ce-cli docker-compose-plugin \
+    && apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
 
 RUN docker compose version
