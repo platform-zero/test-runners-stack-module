@@ -106,6 +106,12 @@ describe('visual suite script', () => {
     expect(script).toContain('qbittorrent');
   });
 
+  it('accepts host-gateway FQDN routes during service preflight', () => {
+    const script = fs.readFileSync(modularSuiteScript, 'utf8');
+    expect(script).toContain('route_host="${service_name}.${DOMAIN:-datamancy.net}"');
+    expect(script).toContain('PLAYWRIGHT_ORIGIN_BYPASS_HOST');
+  });
+
   it('keeps module-owned visual fixtures out of the central runner image', () => {
     const managedRunnerDockerfile = managedRunnerDockerfilePaths.find((candidate) => fs.existsSync(candidate));
     if (!managedRunnerDockerfile) {

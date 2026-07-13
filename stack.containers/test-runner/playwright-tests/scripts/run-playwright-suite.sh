@@ -9,6 +9,7 @@ fi
 
 require_container_health() {
   local service_name="$1"
+  local route_host
   if [ "${TEST_RUNNER_SKIP_SERVICE_PREFLIGHT:-0}" = "1" ]; then
     return 0
   fi
@@ -20,8 +21,11 @@ require_container_health() {
     return 1
   fi
   if ! getent hosts "$service_name" >/dev/null 2>&1; then
-    printf 'missing:%s\n' "$service_name"
-    return 1
+    route_host="${service_name}.${DOMAIN:-datamancy.net}"
+    if ! getent hosts "$route_host" | awk -v ip="${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-}" 'ip != "" && $1 == ip { found = 1 } END { exit found ? 0 : 1 }'; then
+      printf 'missing:%s\n' "$service_name"
+      return 1
+    fi
   fi
   return 0
 }
