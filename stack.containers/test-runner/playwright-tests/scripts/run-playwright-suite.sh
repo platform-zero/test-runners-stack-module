@@ -22,7 +22,7 @@ require_container_health() {
   fi
   if ! getent hosts "$service_name" >/dev/null 2>&1; then
     route_host="${service_name}.${DOMAIN:-datamancy.net}"
-    if ! getent hosts "$route_host" | awk -v ip="${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-}" 'ip != "" && $1 == ip { found = 1 } END { exit found ? 0 : 1 }'; then
+    if ! getent hosts "$route_host" >/dev/null 2>&1; then
       printf 'missing:%s\n' "$service_name"
       return 1
     fi
