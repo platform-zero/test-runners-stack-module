@@ -574,6 +574,133 @@ podman_run_network_args() {
     done < <(rootless_network_names)
 }
 
+env_file_value() {
+    local env_file="$1"
+    local key="$2"
+    awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$env_file"
+}
+
+emit_env_arg() {
+    local key="$1"
+    local value="$2"
+    [ -n "$value" ] || return 0
+    printf '%s\n' "-e"
+    printf '%s\n' "$key=$value"
+}
+
+podman_run_extra_host_args() {
+    local env_file="$1"
+    local domain
+    domain="$(env_file_value "$env_file" DOMAIN)"
+    [ -n "$domain" ] || return 0
+
+    local host
+    for host in \
+        "$domain" \
+        "keycloak.$domain" \
+        "keycloak-auth.$domain" \
+        "keycloak-whoami.$domain" \
+        "onboarding.$domain" \
+        "kopia.$domain" \
+        "prometheus.$domain" \
+        "alerts.$domain" \
+        "grafana.$domain" \
+        "vaultwarden.$domain" \
+        "api.vaultwarden.$domain" \
+        "planka.$domain" \
+        "bookstack.$domain" \
+        "api.bookstack.$domain" \
+        "sogo.$domain" \
+        "jellyfin.$domain" \
+        "donetick.$domain" \
+        "erpnext.$domain" \
+        "seafile.$domain" \
+        "api.seafile.$domain" \
+        "onlyoffice.$domain" \
+        "matrix.$domain" \
+        "api.matrix.$domain" \
+        "matrix-rtc.$domain" \
+        "element.$domain" \
+        "api.element.$domain" \
+        "forgejo.$domain" \
+        "git.$domain" \
+        "homeassistant.$domain" \
+        "api.homeassistant.$domain" \
+        "jupyter.$domain" \
+        "mastodon.$domain" \
+        "api.mastodon.$domain" \
+        "ntfy.$domain" \
+        "opensearch.$domain" \
+        "qbittorrent.$domain" \
+        "www.$domain"; do
+        printf '%s\n' "--add-host"
+        printf '%s\n' "$host:host-gateway"
+    done
+}
+
+podman_run_service_env_args() {
+    local env_file="$1"
+    local domain
+    domain="$(env_file_value "$env_file" DOMAIN)"
+
+    emit_env_arg DOMAIN "$domain"
+    [ -n "$domain" ] && emit_env_arg BASE_URL "https://$domain"
+    [ -n "$domain" ] && emit_env_arg KEYCLOAK_URL "https://keycloak.$domain"
+    emit_env_arg KEYCLOAK_INTERNAL_URL "http://keycloak:8080"
+    emit_env_arg KEYCLOAK_REALM "webservices"
+    emit_env_arg KEYCLOAK_ADMIN_USER "admin"
+    emit_env_arg KEYCLOAK_ADMIN_PASSWORD "$(env_file_value "$env_file" KEYCLOAK_ADMIN_PASSWORD)"
+    emit_env_arg IDENTITY_PROVIDER "$(env_file_value "$env_file" IDENTITY_PROVIDER)"
+    emit_env_arg TEST_RUNNER_OAUTH_SECRET "$(env_file_value "$env_file" TEST_RUNNER_OAUTH_SECRET)"
+    emit_env_arg MODEL_CONTEXT_OIDC_CLIENT_ID "test-runner"
+    emit_env_arg MODEL_CONTEXT_OIDC_REDIRECT_URI "http://test-runner-managed/callback"
+    emit_env_arg MODEL_CONTEXT_OIDC_SCOPE "openid profile email groups"
+    emit_env_arg MODEL_CONTEXT_PROXY_AUTH_SECRET "$(env_file_value "$env_file" MODEL_CONTEXT_PROXY_AUTH_SECRET)"
+    emit_env_arg OPENSEARCH_URL "http://opensearch:9200"
+    emit_env_arg OPENSEARCH_USERNAME "admin"
+    emit_env_arg OPENSEARCH_ADMIN_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
+    emit_env_arg OPENSEARCH_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
+    emit_env_arg DISABLE_TLS_VALIDATION "true"
+    emit_env_arg STACK_ADMIN_USER "$(env_file_value "$env_file" STACK_ADMIN_USER)"
+    emit_env_arg STACK_ADMIN_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
+    emit_env_arg STACK_ADMIN_EMAIL "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
+    emit_env_arg POSTGRES_HOST "postgres-ssd"
+    emit_env_arg POSTGRES_PORT "5432"
+    emit_env_arg POSTGRES_DB "webservices"
+    emit_env_arg POSTGRES_USER "test_runner_user"
+    emit_env_arg POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_TEST_RUNNER_PASSWORD)"
+    emit_env_arg MATRIX_POSTGRES_HOST "postgres"
+    emit_env_arg MATRIX_POSTGRES_PORT "5432"
+    emit_env_arg MATRIX_POSTGRES_DB "synapse"
+    emit_env_arg MATRIX_POSTGRES_USER "synapse"
+    emit_env_arg MATRIX_POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_SYNAPSE_PASSWORD)"
+    emit_env_arg SYNAPSE_REGISTRATION_SECRET "$(env_file_value "$env_file" SYNAPSE_REGISTRATION_SECRET)"
+    emit_env_arg LIVEKIT_API_KEY "$(env_file_value "$env_file" LIVEKIT_API_KEY)"
+    emit_env_arg LIVEKIT_API_SECRET "$(env_file_value "$env_file" LIVEKIT_API_SECRET)"
+    emit_env_arg SEAFILE_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
+    emit_env_arg SEAFILE_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
+    emit_env_arg FORGEJO_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_USER)"
+    emit_env_arg PLANKA_EMAIL "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
+    emit_env_arg PLANKA_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
+    emit_env_arg MASTODON_EMAIL "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
+    emit_env_arg MASTODON_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
+    emit_env_arg MASTODON_API_TOKEN "$(env_file_value "$env_file" MASTODON_API_TOKEN)"
+    [ -n "$domain" ] && emit_env_arg MASTODON_HOST_HEADER "mastodon.$domain"
+    emit_env_arg MARIADB_HOST "mariadb"
+    emit_env_arg MARIADB_PORT "3306"
+    emit_env_arg MARIADB_USER "bookstack"
+    emit_env_arg MARIADB_PASSWORD "$(env_file_value "$env_file" MARIADB_BOOKSTACK_PASSWORD)"
+    emit_env_arg VALKEY_ADMIN_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
+    emit_env_arg VALKEY_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
+    emit_env_arg QDRANT_API_KEY "$(env_file_value "$env_file" QDRANT_ADMIN_API_KEY)"
+    emit_env_arg NTFY_USERNAME "$(env_file_value "$env_file" NTFY_USERNAME)"
+    emit_env_arg NTFY_PASSWORD "$(env_file_value "$env_file" NTFY_PASSWORD)"
+    emit_env_arg BOOKSTACK_API_TOKEN_ID "$(env_file_value "$env_file" BOOKSTACK_API_TOKEN_ID)"
+    emit_env_arg BOOKSTACK_API_TOKEN_SECRET "$(env_file_value "$env_file" BOOKSTACK_API_TOKEN_SECRET)"
+    emit_env_arg VAULTWARDEN_ORG_ID "$(env_file_value "$env_file" VAULTWARDEN_ORG_ID)"
+    emit_env_arg VAULTWARDEN_ORG_IDENTIFIER "$(env_file_value "$env_file" VAULTWARDEN_ORG_IDENTIFIER)"
+}
+
 podman_run_env_args() {
     local command_line="$1"
     local rootless_release="$2"
@@ -597,6 +724,7 @@ podman_run_env_args() {
     printf '%s\n' "CADDY_URL=${CADDY_URL:-http://host.containers.internal:80}"
     printf '%s\n' "-e"
     printf '%s\n' "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}"
+    podman_run_service_env_args "$env_file"
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line"
     printf '%s\n' "-e"
@@ -639,6 +767,7 @@ run_podman_test_container() {
         printf '%s\n' "--init"
         printf '%s\n' "--add-host"
         printf '%s\n' "host.containers.internal:host-gateway"
+        podman_run_extra_host_args "$env_file"
         podman_run_network_args
         podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file" "$env_file"
         podman_run_passthrough_env_args
