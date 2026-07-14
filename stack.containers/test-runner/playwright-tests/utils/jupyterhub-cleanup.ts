@@ -6,7 +6,7 @@ type JupyterContainer = {
 };
 
 function containerCli(): string {
-  return (process.env.TEST_RUNNER_CONTAINER_CLI || 'docker').trim() || 'docker';
+  return (process.env.TEST_RUNNER_CONTAINER_CLI || 'podman').trim() || 'podman';
 }
 
 function runContainerCli(args: string[]): string {
