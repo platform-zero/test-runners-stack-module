@@ -7,7 +7,7 @@ services:
     image: "stack/test-runner:local-build"
     build:
       context: "./build"
-      containerfile: "./stack.containers/test-runner/Dockerfile"
+      containerfile: "./stack.containers/test-runner/Containerfile"
     containerName: "test-runner"
     lifecycle: "on-demand"
     updatePolicy: "pinned"
@@ -184,7 +184,7 @@ services:
     image: "stack/test-runner:local-build"
     build:
       context: "./build"
-      containerfile: "./stack.containers/test-runner/Dockerfile"
+      containerfile: "./stack.containers/test-runner/Containerfile"
     lifecycle: "on-demand"
     updatePolicy: "pinned"
     placement: "rootful"

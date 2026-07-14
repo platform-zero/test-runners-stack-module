@@ -94,7 +94,7 @@ export default defineConfig({
     },
 
     // Firefox disabled - not installed in container (optimization to reduce build time)
-    // See stack.containers/test-runner/Dockerfile line 55
+    // See stack.containers/test-runner/Containerfile
     // {
     //   name: 'firefox',
     //   use: { ...devices['Desktop Firefox'] },
