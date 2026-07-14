@@ -202,6 +202,10 @@ rootless_container_host() {
     printf 'unix://%s/podman/podman.sock\n' "$(rootless_xdg_runtime_dir)"
 }
 
+managed_container_host() {
+    printf 'unix:///run/podman/podman.sock\n'
+}
+
 rootless_user_env() {
     local uid home runtime_dir
     uid="$(rootless_uid)"
@@ -586,7 +590,7 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_CONTAINER_CLI=podman"
     printf '%s\n' "-e"
-    printf '%s\n' "CONTAINER_HOST=$(rootless_container_host)"
+    printf '%s\n' "CONTAINER_HOST=$(managed_container_host)"
     printf '%s\n' "-e"
     printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
     printf '%s\n' "-e"
@@ -742,6 +746,7 @@ run_runner_no_build() {
         purge_managed_runner_container
     fi
 
+    repair_dir_ownership "$results_root" || echo -e "${YELLOW}Warning:${NC} unable to repair ownership for $results_root" >&2
     print_artifact_paths "$results_root" "${1:-}"
 
     return "$status"
@@ -805,6 +810,7 @@ run_all_tests() {
             failed=$((failed + 1))
             echo -e "${RED}FAIL${NC} $step_name (exit $command_status)"
         fi
+        repair_dir_ownership "$results_root" || echo -e "${YELLOW}Warning:${NC} unable to repair ownership for $results_root" >&2
         printf '%s\t%s\n' "$step_name" "$command_status" >> "$summary_file"
     done
 
