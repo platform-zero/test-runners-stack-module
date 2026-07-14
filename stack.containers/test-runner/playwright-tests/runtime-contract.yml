@@ -4,7 +4,7 @@ services:
   playwright-tests:
     build: .
     environment:
-      # Legacy convenience compose file only.
+      # Legacy convenience runtime contract file only.
       # Preferred path is the bundled run-tests.sh with runtime/stack.env rendered by deploy.sh.
 
       STACK_ADMIN_USER: ${STACK_ADMIN_USER:-}

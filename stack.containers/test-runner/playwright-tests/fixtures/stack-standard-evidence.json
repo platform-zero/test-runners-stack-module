@@ -799,7 +799,7 @@
           "path": "/@screenshot_demo",
           "expectedText": [
             "Alice Morgan",
-            "Docker Compose cleanup"
+            "Runtime contract cleanup"
           ],
           "operatorValue": "Shows real public posts on the social instance."
         },

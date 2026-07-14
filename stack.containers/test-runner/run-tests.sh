@@ -4,13 +4,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR_DEFAULT=""
-if [ -f "$SCRIPT_DIR/docker-compose.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
+if [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
-elif [ -f "$SCRIPT_DIR/docker-compose.yml" ] && [ -f "$SCRIPT_DIR/stack.compose/test-runners.yml" ]; then
+elif [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/quadlet" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
-elif [ -f "$SCRIPT_DIR/../../docker-compose.yml" ] && [ -f "$SCRIPT_DIR/../../stack.compose/test-runners.yml" ]; then
+elif [ -f "$SCRIPT_DIR/../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../quadlet" ]; then
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/runtime-contract.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
+    PROJECT_ROOT="$SCRIPT_DIR"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/runtime-contract.yml" ] && [ -f "$SCRIPT_DIR/runtime.contract/test-runners.yml" ]; then
+    PROJECT_ROOT="$SCRIPT_DIR"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/../../runtime-contract.yml" ] && [ -f "$SCRIPT_DIR/../../runtime.contract/test-runners.yml" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -d "$SCRIPT_DIR/../global.settings" ]; then
@@ -25,8 +34,9 @@ else
 fi
 
 DIST_DIR="${DIST_DIR:-$DIST_DIR_DEFAULT}"
-PRIMARY_COMPOSE_FILE="${COMPOSE_FILE_PATH:-$DIST_DIR/docker-compose.yml}"
-TEST_RUNNERS_COMPOSE_FILE="${TEST_RUNNERS_COMPOSE_FILE_PATH:-$DIST_DIR/stack.compose/test-runners.yml}"
+BUNDLE_METADATA_FILE="${BUNDLE_METADATA_FILE_PATH:-$DIST_DIR/bundle.json}"
+PRIMARY_RUNTIME_CONTRACT_FILE="${RUNTIME_CONTRACT_FILE_PATH:-$DIST_DIR/runtime-contract.yml}"
+TEST_RUNNERS_RUNTIME_CONTRACT_FILE="${TEST_RUNNERS_RUNTIME_CONTRACT_FILE_PATH:-$DIST_DIR/runtime.contract/test-runners.yml}"
 TEST_RUNNER_SERVICE="test-runner"
 TEST_RUNNER_MANAGED_SERVICE="${TEST_RUNNER_MANAGED_SERVICE:-test-runner-managed}"
 TEST_RUNNER_IMAGE="${TEST_RUNNER_IMAGE:-stack/test-runner:local-build}"
@@ -88,8 +98,9 @@ print_header() {
     echo -e "${YELLOW}Artifacts:${NC}"
     echo "  Compose project: $COMPOSE_PROJECT_NAME"
     echo "  Project dir:    $COMPOSE_PROJECT_DIR"
-    echo "  Compose stack: $PRIMARY_COMPOSE_FILE"
-    echo "  Test override: $TEST_RUNNERS_COMPOSE_FILE"
+    echo "  Bundle metadata: $BUNDLE_METADATA_FILE"
+    echo "  Compose contract: $PRIMARY_RUNTIME_CONTRACT_FILE"
+    echo "  Test override:   $TEST_RUNNERS_RUNTIME_CONTRACT_FILE"
     echo "  Runtime env:   $RUNTIME_ENV_FILE"
     echo "  Results root:  $results_root"
     echo ""
@@ -156,15 +167,21 @@ container_cli() {
 }
 
 ensure_compose_artifacts() {
-    if [ ! -f "$PRIMARY_COMPOSE_FILE" ]; then
-        echo -e "${RED}Error:${NC} Compose file not found: $PRIMARY_COMPOSE_FILE" >&2
-        echo "Run ./build.sh --manifest /path/to/manifest.json first to create the bundle under ./dist/build." >&2
+    if [ ! -f "$BUNDLE_METADATA_FILE" ] && [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
+        echo -e "${RED}Error:${NC} Bundle metadata not found: $BUNDLE_METADATA_FILE" >&2
+        echo "Generate a Podman bundle first so bundle.json and quadlet outputs are present." >&2
         exit 1
     fi
 
-    if [ ! -f "$TEST_RUNNERS_COMPOSE_FILE" ]; then
-        echo -e "${RED}Error:${NC} Test runner override not found: $TEST_RUNNERS_COMPOSE_FILE" >&2
-        echo "Run ./build.sh --manifest /path/to/manifest.json to refresh the bundled test-runner artifacts." >&2
+    if [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
+        echo -e "${RED}Error:${NC} Compose compatibility artifact not found: $PRIMARY_RUNTIME_CONTRACT_FILE" >&2
+        echo "Refresh the bundled runtime contracts so the managed test-runner can launch its compatibility compose overlay." >&2
+        exit 1
+    fi
+
+    if [ ! -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" ]; then
+        echo -e "${RED}Error:${NC} Test runner override not found: $TEST_RUNNERS_RUNTIME_CONTRACT_FILE" >&2
+        echo "Refresh the bundled test-runner compatibility overlay." >&2
         exit 1
     fi
 
@@ -295,7 +312,11 @@ resolve_test_runner_systemd_runtime_host_dir() {
     printf '%s\n' "$runtime_dir"
 }
 
-docker_compose() {
+container_contract() {
+    "$(container_cli)" compose "$@"
+}
+
+compose_runner() {
     ensure_compose_artifacts
     local components_lock_file
     components_lock_file="$(resolve_test_runner_components_lock_host_file)"
@@ -303,17 +324,17 @@ docker_compose() {
     TEST_RUNNER_RUNTIME_HOST_DIR="$(resolve_test_runner_runtime_host_dir)" \
     TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE="$components_lock_file" \
     TEST_RUNNER_HOST_XDG_RUNTIME_DIR="$(resolve_test_runner_systemd_runtime_host_dir)" \
-    docker compose \
+    container_contract \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$COMPOSE_PROJECT_DIR" \
-        -f "$PRIMARY_COMPOSE_FILE" \
-        -f "$TEST_RUNNERS_COMPOSE_FILE" \
+        -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
+        -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
         "$@"
 }
 
 build_runner_image() {
     echo "Building managed test-runner image: $TEST_RUNNER_IMAGE" >&2
-    docker_compose build "$TEST_RUNNER_SERVICE"
+    compose_runner build "$TEST_RUNNER_SERVICE"
 }
 
 managed_runner_container_name() {
@@ -350,7 +371,7 @@ print_managed_runner_failure_diagnostics() {
     echo -e "${YELLOW}Managed runner failure diagnostics:${NC}" >&2
     echo "  container: $container_name" >&2
     echo "  exit status: $exit_status" >&2
-    echo "  docker state: $state_status" >&2
+    echo "  container state: $state_status" >&2
     echo "  oom_killed: $state_oom" >&2
     [ -n "$state_error" ] && [ "$state_error" != "<nil>" ] && echo "  state error: $state_error" >&2
     [ -n "$state_finished" ] && echo "  finished at: $state_finished" >&2
@@ -359,7 +380,7 @@ print_managed_runner_failure_diagnostics() {
         if [ "$state_oom" = "true" ]; then
             echo "  likely cause: container was OOM-killed by the kernel or runtime memory pressure" >&2
         else
-            echo "  likely cause: container received SIGKILL (docker stop/kill, host pressure, or external interruption)" >&2
+            echo "  likely cause: container received SIGKILL (container stop/kill, host pressure, or external interruption)" >&2
         fi
     fi
 }
@@ -430,7 +451,7 @@ shell_join_args() {
     printf '%s\n' "$joined"
 }
 
-docker_compose_with_env() {
+compose_runner_with_env() {
     ensure_compose_artifacts
     local results_root="$1"
     shift
@@ -449,11 +470,11 @@ docker_compose_with_env() {
         shift
     fi
 
-    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" docker compose \
+    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" "$(container_cli)" compose \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$COMPOSE_PROJECT_DIR" \
-        -f "$PRIMARY_COMPOSE_FILE" \
-        -f "$TEST_RUNNERS_COMPOSE_FILE" \
+        -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
+        -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
         "$@"
 }
 
@@ -496,13 +517,13 @@ run_runner_no_build() {
     command_line="$(shell_join_args "$@")"
     purge_managed_runner_container
 
-    docker_compose_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
 
     set +e
-    docker_compose_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         up --force-recreate --no-build --pull never --no-deps --abort-on-container-exit --exit-code-from "$TEST_RUNNER_MANAGED_SERVICE" "$TEST_RUNNER_MANAGED_SERVICE"
@@ -517,7 +538,7 @@ run_runner_no_build() {
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
         echo "Inspect with: $(container_cli) inspect $(managed_runner_container_name)" >&2
     else
-        docker_compose_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+        compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
             "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
             -- \
             rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
@@ -792,8 +813,8 @@ print_changed_plan() {
             stack.containers/test-runner/playwright-tests/tests/deep/*) targets+=("ts-e2e-deep") ;;
             stack.containers/test-runner/playwright-tests/tests/visual/*|stack.containers/test-runner/playwright-tests/utils/route-catalog.ts) targets+=("ts-e2e-visual") ;;
             stack.containers/test-runner/*) targets+=("source-unit" "ts-unit") ;;
-            stack.compose/kopia.yml|scripts/testdev/*) targets+=("source-unit" "kt-recovery" "kt-contract") ;;
-            stack.compose/*|stack.config/*|scripts/*) targets+=("source-unit" "kt-contract" "ts-boundary") ;;
+            runtime.contract/kopia.yml|scripts/testdev/*) targets+=("source-unit" "kt-recovery" "kt-contract") ;;
+            runtime.contract/*|stack.config/*|scripts/*) targets+=("source-unit" "kt-contract" "ts-boundary") ;;
             *) targets+=("source-unit") ;;
         esac
     done

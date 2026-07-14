@@ -49,8 +49,8 @@ export default defineConfig({
 
   /* Shared settings for all projects */
   use: {
-    /* Base URL for tests - use full live domain even inside Docker.
-     * Docker Compose provides DNS resolution for the configured wildcard hosts to Caddy.
+    /* Base URL for tests - use full live domain even inside containers.
+     * The managed runtime provides DNS resolution for the configured wildcard hosts to Caddy.
      * This ensures TLS certificates are valid and auth cookies work correctly
      */
     baseURL: process.env.BASE_URL || `https://${stackDomain}`,
