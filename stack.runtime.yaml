@@ -361,5 +361,50 @@ services:
       limits:
         memory: "${TEST_RUNNER_MEMORY_LIMIT:-4G}"
         cpus: "${TEST_RUNNER_CPU_LIMIT:-3.0}"
-networks: {}
+networks:
+  ai:
+    name: "webservices_rootless_ai"
+    external: true
+  caddy:
+    name: "webservices_rootless_caddy"
+    external: true
+  default:
+    name: "webservices_rootless_default"
+    external: true
+  internet:
+    name: "webservices_rootless_internet"
+    external: true
+  mailserver:
+    name: "webservices_rootless_mailserver"
+    external: true
+  mariadb:
+    name: "webservices_rootless_mariadb"
+    external: true
+  mastodon-internal:
+    name: "webservices_rootless_mastodon-internal"
+    external: true
+  matrix-internal:
+    name: "webservices_rootless_matrix-internal"
+    external: true
+  memcached:
+    name: "webservices_rootless_memcached"
+    external: true
+  monitoring:
+    name: "webservices_rootless_monitoring"
+    external: true
+  pipeline:
+    name: "webservices_rootless_pipeline"
+    external: true
+  postgres:
+    name: "webservices_rootless_postgres"
+    external: true
+  qdrant:
+    name: "webservices_rootless_qdrant"
+    external: true
+  opensearch:
+    name: "webservices_rootless_opensearch"
+    external: true
+  valkey:
+    name: "webservices_rootless_valkey"
+    external: true
 volumes: {}
