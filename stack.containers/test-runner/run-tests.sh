@@ -13,13 +13,13 @@ elif [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/quadlet" ]; then
 elif [ -f "$SCRIPT_DIR/../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../quadlet" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
-elif [ -f "$SCRIPT_DIR/runtime-contract.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
+elif [ -f "$SCRIPT_DIR/runtime-model.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
-elif [ -f "$SCRIPT_DIR/runtime-contract.yml" ] && [ -f "$SCRIPT_DIR/runtime.contract/test-runners.yml" ]; then
+elif [ -f "$SCRIPT_DIR/runtime-model.yml" ] && [ -f "$SCRIPT_DIR/runtime.overlays/test-runners.yml" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
-elif [ -f "$SCRIPT_DIR/../../runtime-contract.yml" ] && [ -f "$SCRIPT_DIR/../../runtime.contract/test-runners.yml" ]; then
+elif [ -f "$SCRIPT_DIR/../../runtime-model.yml" ] && [ -f "$SCRIPT_DIR/../../runtime.overlays/test-runners.yml" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -d "$SCRIPT_DIR/../global.settings" ]; then
@@ -35,8 +35,8 @@ fi
 
 DIST_DIR="${DIST_DIR:-$DIST_DIR_DEFAULT}"
 BUNDLE_METADATA_FILE="${BUNDLE_METADATA_FILE_PATH:-$DIST_DIR/bundle.json}"
-PRIMARY_RUNTIME_CONTRACT_FILE="${RUNTIME_CONTRACT_FILE_PATH:-$DIST_DIR/runtime-contract.yml}"
-TEST_RUNNERS_RUNTIME_CONTRACT_FILE="${TEST_RUNNERS_RUNTIME_CONTRACT_FILE_PATH:-$DIST_DIR/runtime.contract/test-runners.yml}"
+PRIMARY_RUNTIME_MODEL_FILE="${RUNTIME_MODEL_FILE_PATH:-$DIST_DIR/runtime-model.yml}"
+TEST_RUNNERS_RUNTIME_MODEL_FILE="${TEST_RUNNERS_RUNTIME_MODEL_FILE_PATH:-$DIST_DIR/runtime.overlays/test-runners.yml}"
 TEST_RUNNER_SERVICE="test-runner"
 TEST_RUNNER_MANAGED_SERVICE="${TEST_RUNNER_MANAGED_SERVICE:-test-runner-managed}"
 TEST_RUNNER_IMAGE="${TEST_RUNNER_IMAGE:-stack/test-runner:local-build}"
@@ -44,7 +44,7 @@ TEST_RUNNER_KEEP_FAILED_CONTAINER="${TEST_RUNNER_KEEP_FAILED_CONTAINER:-0}"
 DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
+export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
 if [ "$TEST_RUNNER_CONTAINER_CLI" = "podman" ] && [ -z "${CONTAINER_HOST:-}" ]; then
     export CONTAINER_HOST="unix:///run/podman/podman.sock"
@@ -96,11 +96,11 @@ print_header() {
     echo -e "${BLUE}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${YELLOW}Artifacts:${NC}"
-    echo "  Runtime project: $COMPOSE_PROJECT_NAME"
+    echo "  Runtime project: $RUNTIME_PROJECT_NAME"
     echo "  Project dir:    $RUNTIME_PROJECT_DIR"
     echo "  Bundle metadata: $BUNDLE_METADATA_FILE"
-    echo "  Runtime contract: $PRIMARY_RUNTIME_CONTRACT_FILE"
-    echo "  Test override:   $TEST_RUNNERS_RUNTIME_CONTRACT_FILE"
+    echo "  Runtime model: $PRIMARY_RUNTIME_MODEL_FILE"
+    echo "  Test override:   $TEST_RUNNERS_RUNTIME_MODEL_FILE"
     echo "  Runtime env:   $RUNTIME_ENV_FILE"
     echo "  Results root:  $results_root"
     echo ""
@@ -166,21 +166,21 @@ container_cli() {
     printf '%s\n' "$TEST_RUNNER_CONTAINER_CLI"
 }
 
-ensure_runtime_contract_artifacts() {
-    if [ ! -f "$BUNDLE_METADATA_FILE" ] && [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
+ensure_runtime_model_artifacts() {
+    if [ ! -f "$BUNDLE_METADATA_FILE" ] && [ ! -f "$PRIMARY_RUNTIME_MODEL_FILE" ]; then
         echo -e "${RED}Error:${NC} Bundle metadata not found: $BUNDLE_METADATA_FILE" >&2
         echo "Generate a Podman bundle first so bundle.json and quadlet outputs are present." >&2
         exit 1
     fi
 
-    if [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
-        echo -e "${RED}Error:${NC} Runtime contract artifact not found: $PRIMARY_RUNTIME_CONTRACT_FILE" >&2
-        echo "Refresh the bundled runtime contracts so the managed test-runner can launch its compatibility overlay." >&2
+    if [ ! -f "$PRIMARY_RUNTIME_MODEL_FILE" ]; then
+        echo -e "${RED}Error:${NC} Runtime model artifact not found: $PRIMARY_RUNTIME_MODEL_FILE" >&2
+        echo "Refresh the bundled runtime models so the managed test-runner can launch its compatibility overlay." >&2
         exit 1
     fi
 
-    if [ ! -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" ]; then
-        echo -e "${RED}Error:${NC} Test runner override not found: $TEST_RUNNERS_RUNTIME_CONTRACT_FILE" >&2
+    if [ ! -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" ]; then
+        echo -e "${RED}Error:${NC} Test runner override not found: $TEST_RUNNERS_RUNTIME_MODEL_FILE" >&2
         echo "Refresh the bundled test-runner compatibility overlay." >&2
         exit 1
     fi
@@ -316,8 +316,8 @@ container_contract() {
     "$(container_cli)" compose "$@"
 }
 
-runtime_contract_runner() {
-    ensure_runtime_contract_artifacts
+runtime_model_runner() {
+    ensure_runtime_model_artifacts
     local components_lock_file
     components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     TEST_RESULTS_HOST_DIR="$(resolve_test_results_host_dir)" \
@@ -327,18 +327,18 @@ runtime_contract_runner() {
     container_contract \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$RUNTIME_PROJECT_DIR" \
-        -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
-        -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
+        -f "$PRIMARY_RUNTIME_MODEL_FILE" \
+        -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" \
         "$@"
 }
 
 build_runner_image() {
     echo "Building managed test-runner image: $TEST_RUNNER_IMAGE" >&2
-    runtime_contract_runner build "$TEST_RUNNER_SERVICE"
+    runtime_model_runner build "$TEST_RUNNER_SERVICE"
 }
 
 managed_runner_container_name() {
-    printf '%s-%s-1\n' "$COMPOSE_PROJECT_NAME" "$TEST_RUNNER_MANAGED_SERVICE"
+    printf '%s-%s-1\n' "$RUNTIME_PROJECT_NAME" "$TEST_RUNNER_MANAGED_SERVICE"
 }
 
 purge_managed_runner_container() {
@@ -451,8 +451,8 @@ shell_join_args() {
     printf '%s\n' "$joined"
 }
 
-runtime_contract_runner_with_env() {
-    ensure_runtime_contract_artifacts
+runtime_model_runner_with_env() {
+    ensure_runtime_model_artifacts
     local results_root="$1"
     shift
     local runtime_root
@@ -473,8 +473,8 @@ runtime_contract_runner_with_env() {
     env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" "$(container_cli)" compose \
         --env-file "$RUNTIME_ENV_FILE" \
         --project-directory "$RUNTIME_PROJECT_DIR" \
-        -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
-        -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
+        -f "$PRIMARY_RUNTIME_MODEL_FILE" \
+        -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" \
         "$@"
 }
 
@@ -517,13 +517,13 @@ run_runner_no_build() {
     command_line="$(shell_join_args "$@")"
     purge_managed_runner_container
 
-    runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
 
     set +e
-    runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         up --force-recreate --no-build --pull never --no-deps --abort-on-container-exit --exit-code-from "$TEST_RUNNER_MANAGED_SERVICE" "$TEST_RUNNER_MANAGED_SERVICE"
@@ -538,7 +538,7 @@ run_runner_no_build() {
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
         echo "Inspect with: $(container_cli) inspect $(managed_runner_container_name)" >&2
     else
-        runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+        runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
             "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
             -- \
             rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
@@ -813,8 +813,8 @@ print_changed_plan() {
             stack.containers/test-runner/playwright-tests/tests/deep/*) targets+=("ts-e2e-deep") ;;
             stack.containers/test-runner/playwright-tests/tests/visual/*|stack.containers/test-runner/playwright-tests/utils/route-catalog.ts) targets+=("ts-e2e-visual") ;;
             stack.containers/test-runner/*) targets+=("source-unit" "ts-unit") ;;
-            runtime.contract/kopia.yml|scripts/testdev/*) targets+=("source-unit" "kt-recovery" "kt-contract") ;;
-            runtime.contract/*|stack.config/*|scripts/*) targets+=("source-unit" "kt-contract" "ts-boundary") ;;
+            runtime.overlays/kopia.yml|scripts/testdev/*) targets+=("source-unit" "kt-recovery" "kt-contract") ;;
+            runtime.overlays/*|stack.config/*|scripts/*) targets+=("source-unit" "kt-contract" "ts-boundary") ;;
             *) targets+=("source-unit") ;;
         esac
     done

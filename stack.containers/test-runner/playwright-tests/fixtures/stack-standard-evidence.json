@@ -799,7 +799,7 @@
           "path": "/@screenshot_demo",
           "expectedText": [
             "Alice Morgan",
-            "Runtime contract cleanup"
+            "Runtime model cleanup"
           ],
           "operatorValue": "Shows real public posts on the social instance."
         },

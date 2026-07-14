@@ -2,4 +2,4 @@ components:
   - name: embedding-gpu
     source_paths:
       - stack.containers/embedding-bge
-      - runtime.contract/embedding.yml
+      - runtime.overlays/embedding.yml

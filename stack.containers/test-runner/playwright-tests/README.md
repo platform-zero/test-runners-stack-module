@@ -74,4 +74,4 @@ npm run test:e2e:one -- tests/deep/forward-auth/homepage.spec.ts
 - `app-smoke` is the default fast authenticated honesty suite.
 - `sso` proves cross-service session reuse explicitly instead of bundling it into generic smoke.
 - `deep` and `visual` remain explicit suites in the full browser matrix.
-- The legacy `playwright-tests/runtime-contract.yml` is only a convenience file; the authoritative test-runner wiring is the bundled `run-tests.sh` plus the deployed Podman-managed `test-runner-managed` service.
+- The legacy `playwright-tests/runtime-model.yml` is only a convenience file; the authoritative test-runner wiring is the bundled `run-tests.sh` plus the deployed Podman-managed `test-runner-managed` service.
