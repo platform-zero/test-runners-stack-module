@@ -19,6 +19,7 @@
   "smoke": "external-only",
   "smokeUnsupportedReason": "requires generated bundle context, deployed networking, secrets, or service dependencies",
   "overlays": [
+    "runtime.contract/test-runners.yml",
     "stack.config/test-runner",
     "stack.containers/test-runner",
     "stack.runtime.yaml"
