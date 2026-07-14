@@ -20,7 +20,7 @@ test.use({ storageState: authenticatedSessionState });
     console.log('\n🧪 Testing session persistence across services');
 
     // Visit multiple active forward-auth services in sequence - should not require re-auth.
-    // JupyterHub is still a compose-only module in the Podman refactor and is
+    // JupyterHub is still excluded in the Podman refactor and is
     // intentionally excluded until it has a generated Podman service.
     const services = [
       {

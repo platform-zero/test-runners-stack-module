@@ -226,7 +226,7 @@ run_group() {
   esac
 }
 
-run_composed() {
+run_group_sequence() {
   local failed=0 group rc
   for group in "$@"; do
     printf '\n[playwright-suite] running %s\n' "$group" >&2
@@ -269,7 +269,7 @@ run_target() {
     visual)
       groups="visual:coverage visual:portal visual:apps visual:media visual:utilities"
       # shellcheck disable=SC2086
-      run_composed $groups
+      run_group_sequence $groups
       ;;
     all)
       local failed=0 target rc

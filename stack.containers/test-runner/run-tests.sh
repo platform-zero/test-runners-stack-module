@@ -42,9 +42,9 @@ TEST_RUNNER_MANAGED_SERVICE="${TEST_RUNNER_MANAGED_SERVICE:-test-runner-managed}
 TEST_RUNNER_IMAGE="${TEST_RUNNER_IMAGE:-stack/test-runner:local-build}"
 TEST_RUNNER_KEEP_FAILED_CONTAINER="${TEST_RUNNER_KEEP_FAILED_CONTAINER:-0}"
 DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
-DEFAULT_COMPOSE_PROJECT_NAME="${DEFAULT_COMPOSE_PROJECT_NAME:-webservices}"
+DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
-export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$DEFAULT_COMPOSE_PROJECT_NAME}"
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
 if [ "$TEST_RUNNER_CONTAINER_CLI" = "podman" ] && [ -z "${CONTAINER_HOST:-}" ]; then
     export CONTAINER_HOST="unix:///run/podman/podman.sock"
@@ -73,7 +73,7 @@ default_runtime_env_file() {
     printf '%s\n' "$DIST_DIR/runtime/stack.env"
 }
 
-resolve_compose_project_dir() {
+resolve_runtime_project_dir() {
     local dist_parent=""
     dist_parent="$(dirname "$DIST_DIR")"
 
@@ -86,7 +86,7 @@ resolve_compose_project_dir() {
 }
 
 RUNTIME_ENV_FILE="${RUNTIME_ENV_FILE_PATH:-$(default_runtime_env_file)}"
-COMPOSE_PROJECT_DIR="${COMPOSE_PROJECT_DIR:-$(resolve_compose_project_dir)}"
+RUNTIME_PROJECT_DIR="${RUNTIME_PROJECT_DIR:-$(resolve_runtime_project_dir)}"
 
 print_header() {
     local results_root
@@ -96,10 +96,10 @@ print_header() {
     echo -e "${BLUE}╚═══════════════════════════════════════════════════════════════════════════╝${NC}"
     echo ""
     echo -e "${YELLOW}Artifacts:${NC}"
-    echo "  Compose project: $COMPOSE_PROJECT_NAME"
-    echo "  Project dir:    $COMPOSE_PROJECT_DIR"
+    echo "  Runtime project: $COMPOSE_PROJECT_NAME"
+    echo "  Project dir:    $RUNTIME_PROJECT_DIR"
     echo "  Bundle metadata: $BUNDLE_METADATA_FILE"
-    echo "  Compose contract: $PRIMARY_RUNTIME_CONTRACT_FILE"
+    echo "  Runtime contract: $PRIMARY_RUNTIME_CONTRACT_FILE"
     echo "  Test override:   $TEST_RUNNERS_RUNTIME_CONTRACT_FILE"
     echo "  Runtime env:   $RUNTIME_ENV_FILE"
     echo "  Results root:  $results_root"
@@ -166,7 +166,7 @@ container_cli() {
     printf '%s\n' "$TEST_RUNNER_CONTAINER_CLI"
 }
 
-ensure_compose_artifacts() {
+ensure_runtime_contract_artifacts() {
     if [ ! -f "$BUNDLE_METADATA_FILE" ] && [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
         echo -e "${RED}Error:${NC} Bundle metadata not found: $BUNDLE_METADATA_FILE" >&2
         echo "Generate a Podman bundle first so bundle.json and quadlet outputs are present." >&2
@@ -174,8 +174,8 @@ ensure_compose_artifacts() {
     fi
 
     if [ ! -f "$PRIMARY_RUNTIME_CONTRACT_FILE" ]; then
-        echo -e "${RED}Error:${NC} Compose compatibility artifact not found: $PRIMARY_RUNTIME_CONTRACT_FILE" >&2
-        echo "Refresh the bundled runtime contracts so the managed test-runner can launch its compatibility compose overlay." >&2
+        echo -e "${RED}Error:${NC} Runtime contract artifact not found: $PRIMARY_RUNTIME_CONTRACT_FILE" >&2
+        echo "Refresh the bundled runtime contracts so the managed test-runner can launch its compatibility overlay." >&2
         exit 1
     fi
 
@@ -275,8 +275,8 @@ resolve_test_runner_components_lock_host_file() {
     local candidates=(
         "$DIST_DIR/site/components.lock.json"
         "$(dirname "$DIST_DIR")/build/site/components.lock.json"
-        "$COMPOSE_PROJECT_DIR/build/site/components.lock.json"
-        "$COMPOSE_PROJECT_DIR/site/components.lock.json"
+        "$RUNTIME_PROJECT_DIR/build/site/components.lock.json"
+        "$RUNTIME_PROJECT_DIR/site/components.lock.json"
     )
 
     local candidate
@@ -304,7 +304,7 @@ resolve_test_runner_systemd_runtime_host_dir() {
 
     if [ ! -S "$runtime_dir/bus" ]; then
         echo -e "${RED}Error:${NC} Host user systemd bus is unavailable at $runtime_dir/bus" >&2
-        echo "The managed test-runner now controls compose-managed services through systemd --user." >&2
+        echo "The managed test-runner now controls runtime-managed services through systemd --user." >&2
         echo "Ensure lingering is enabled and the user manager is running before invoking run-tests.sh." >&2
         exit 1
     fi
@@ -316,8 +316,8 @@ container_contract() {
     "$(container_cli)" compose "$@"
 }
 
-compose_runner() {
-    ensure_compose_artifacts
+runtime_contract_runner() {
+    ensure_runtime_contract_artifacts
     local components_lock_file
     components_lock_file="$(resolve_test_runner_components_lock_host_file)"
     TEST_RESULTS_HOST_DIR="$(resolve_test_results_host_dir)" \
@@ -326,7 +326,7 @@ compose_runner() {
     TEST_RUNNER_HOST_XDG_RUNTIME_DIR="$(resolve_test_runner_systemd_runtime_host_dir)" \
     container_contract \
         --env-file "$RUNTIME_ENV_FILE" \
-        --project-directory "$COMPOSE_PROJECT_DIR" \
+        --project-directory "$RUNTIME_PROJECT_DIR" \
         -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
         -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
         "$@"
@@ -334,7 +334,7 @@ compose_runner() {
 
 build_runner_image() {
     echo "Building managed test-runner image: $TEST_RUNNER_IMAGE" >&2
-    compose_runner build "$TEST_RUNNER_SERVICE"
+    runtime_contract_runner build "$TEST_RUNNER_SERVICE"
 }
 
 managed_runner_container_name() {
@@ -451,8 +451,8 @@ shell_join_args() {
     printf '%s\n' "$joined"
 }
 
-compose_runner_with_env() {
-    ensure_compose_artifacts
+runtime_contract_runner_with_env() {
+    ensure_runtime_contract_artifacts
     local results_root="$1"
     shift
     local runtime_root
@@ -472,7 +472,7 @@ compose_runner_with_env() {
 
     env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" "$(container_cli)" compose \
         --env-file "$RUNTIME_ENV_FILE" \
-        --project-directory "$COMPOSE_PROJECT_DIR" \
+        --project-directory "$RUNTIME_PROJECT_DIR" \
         -f "$PRIMARY_RUNTIME_CONTRACT_FILE" \
         -f "$TEST_RUNNERS_RUNTIME_CONTRACT_FILE" \
         "$@"
@@ -517,13 +517,13 @@ run_runner_no_build() {
     command_line="$(shell_join_args "$@")"
     purge_managed_runner_container
 
-    compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
 
     set +e
-    compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+    runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
         "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
         -- \
         up --force-recreate --no-build --pull never --no-deps --abort-on-container-exit --exit-code-from "$TEST_RUNNER_MANAGED_SERVICE" "$TEST_RUNNER_MANAGED_SERVICE"
@@ -538,7 +538,7 @@ run_runner_no_build() {
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
         echo "Inspect with: $(container_cli) inspect $(managed_runner_container_name)" >&2
     else
-        compose_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
+        runtime_contract_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
             "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
             -- \
             rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
