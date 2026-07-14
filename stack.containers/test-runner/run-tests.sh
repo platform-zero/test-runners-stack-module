@@ -446,15 +446,13 @@ print_managed_runner_failure_diagnostics() {
 
 repair_dir_ownership() {
     local target="$1"
-    local uid gid
 
-    uid="$(id -u 2>/dev/null || true)"
-    gid="$(id -g 2>/dev/null || true)"
-    if [ -z "$uid" ] || [ -z "$gid" ] || ! command -v podman >/dev/null 2>&1; then
+    if ! command -v podman >/dev/null 2>&1; then
         return 1
     fi
 
-    rootless_podman run --rm -v "$target:/target" alpine sh -lc "chown -R $uid:$gid /target && chmod -R u+rwX /target" >/dev/null 2>&1
+    rootless_podman unshare chown -R 0:0 "$target" >/dev/null 2>&1
+    chmod -R u+rwX "$target" >/dev/null 2>&1
 }
 
 ensure_writable_dir() {
