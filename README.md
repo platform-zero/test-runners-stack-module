@@ -6,7 +6,7 @@
 - Lifecycle: `active`
 
 ## Owned overlays
-- `stack.compose/test-runners.yml`
+- `stack.runtime.yaml`
 - `stack.config/test-runner`
 - `stack.containers/test-runner`
 

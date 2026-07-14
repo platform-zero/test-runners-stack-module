@@ -32,11 +32,11 @@ copy_tree() {
 
 bootstrap_caddy_ca() {
     local source_cert="${CADDY_CA_PATH:-$DEFAULT_CADDY_CA_PATH}"
-    local attempt
+    local _
     local max_attempts="${CADDY_CA_BOOTSTRAP_ATTEMPTS:-20}"
     local sleep_seconds="${CADDY_CA_BOOTSTRAP_SLEEP_SECONDS:-1}"
 
-    for attempt in $(seq 1 "$max_attempts"); do
+    for _ in $(seq 1 "$max_attempts"); do
         [ -s "$source_cert" ] && break
         sleep "$sleep_seconds"
     done

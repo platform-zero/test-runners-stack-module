@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PLAYWRIGHT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-REPO_ROOT=$(CDPATH= cd -- "$PLAYWRIGHT_DIR/../../.." && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+PLAYWRIGHT_DIR=$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd)
+REPO_ROOT=$(CDPATH='' cd -- "$PLAYWRIGHT_DIR/../../.." && pwd)
 
 have_auth_env() {
   [ -n "${STACK_ADMIN_USER:-}" ] \
