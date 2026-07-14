@@ -236,6 +236,17 @@ rootless_podman() {
     rootless_exec podman "$@"
 }
 
+rootless_podman_unshare() {
+    local home env_args=()
+    require_webservices_user
+    home="$(rootless_home)"
+    mapfile -t env_args < <(rootless_user_env | grep -v '^CONTAINER_HOST=')
+    (
+        cd "$home"
+        env -u CONTAINER_HOST "${env_args[@]}" podman unshare "$@"
+    )
+}
+
 deployed_runtime_env_file() {
     local rootless_release rootful_release
     rootless_release="$(rootless_release_dir 2>/dev/null || true)"
@@ -451,8 +462,8 @@ repair_dir_ownership() {
         return 1
     fi
 
-    rootless_podman unshare chown -R 0:0 "$target" >/dev/null 2>&1
-    chmod -R u+rwX "$target" >/dev/null 2>&1
+    rootless_podman_unshare chown -R 0:0 "$target"
+    chmod -R u+rwX "$target"
 }
 
 ensure_writable_dir() {
@@ -463,7 +474,7 @@ ensure_writable_dir() {
     fi
 
     chmod u+rwx "$dir" 2>/dev/null || true
-    repair_dir_ownership "$dir" || true
+    repair_dir_ownership "$dir" || echo -e "${YELLOW}Warning:${NC} unable to repair ownership for $dir" >&2
 
     if mkdir -p "$dir" 2>/dev/null && [ -d "$dir" ] && [ -w "$dir" ]; then
         return 0
