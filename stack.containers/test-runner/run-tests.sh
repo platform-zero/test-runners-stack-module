@@ -240,10 +240,33 @@ rootless_podman() {
     rootless_exec podman "$@"
 }
 
-ensure_podman_release_artifacts() {
+deployed_runtime_env_file() {
     local rootless_release rootful_release
     rootless_release="$(rootless_release_dir 2>/dev/null || true)"
     rootful_release="$(rootful_release_dir 2>/dev/null || true)"
+    local candidates=(
+        "$RUNTIME_ENV_FILE"
+        "$rootless_release/runtime/stack.env"
+        "$rootful_release/runtime/stack.env"
+    )
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate" ]; then
+            (
+                cd "$(dirname "$candidate")"
+                printf '%s/%s\n' "$(pwd -P)" "$(basename "$candidate")"
+            )
+            return 0
+        fi
+    done
+    return 1
+}
+
+ensure_podman_release_artifacts() {
+    local rootless_release rootful_release env_file
+    rootless_release="$(rootless_release_dir 2>/dev/null || true)"
+    rootful_release="$(rootful_release_dir 2>/dev/null || true)"
+    env_file="$(deployed_runtime_env_file 2>/dev/null || true)"
 
     if [ -z "$rootless_release" ] || [ ! -d "$rootless_release" ]; then
         echo -e "${RED}Error:${NC} active rootless Podman release not found at $WEBSERVICES_ROOTLESS_STATE_ROOT/current" >&2
@@ -257,8 +280,9 @@ ensure_podman_release_artifacts() {
         echo -e "${RED}Error:${NC} test-runner Containerfile missing from active rootless release" >&2
         exit 1
     fi
-    if [ ! -f "$rootless_release/runtime/stack.env" ]; then
-        echo -e "${RED}Error:${NC} runtime env missing from active rootless release: $rootless_release/runtime/stack.env" >&2
+    if [ -z "$env_file" ]; then
+        echo -e "${RED}Error:${NC} runtime env file not found for active deployed stack" >&2
+        echo "Expected one of: $RUNTIME_ENV_FILE, $rootless_release/runtime/stack.env, $rootful_release/runtime/stack.env" >&2
         exit 1
     fi
     if [ ! -f "$rootless_release/site/components.lock.json" ]; then
@@ -554,8 +578,9 @@ podman_run_env_args() {
     local command_line="$1"
     local rootless_release="$2"
     local components_lock_file="$3"
+    local env_file="$4"
     printf '%s\n' "--env-file"
-    printf '%s\n' "$rootless_release/runtime/stack.env"
+    printf '%s\n' "$env_file"
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_RUNTIME_ROOT=/runtime"
     printf '%s\n' "-e"
@@ -596,11 +621,12 @@ run_podman_test_container() {
     local results_root="$1"
     local command_line="$2"
     shift 2
-    local rootless_release container_name components_lock_file status=0
+    local rootless_release container_name components_lock_file env_file status=0
     local run_args=()
     rootless_release="$(rootless_release_dir)"
     container_name="$(managed_runner_container_name)"
     components_lock_file="$(resolve_test_runner_components_lock_host_file)"
+    env_file="$(deployed_runtime_env_file)"
 
     mapfile -t run_args < <(
         printf '%s\n' "run"
@@ -614,7 +640,7 @@ run_podman_test_container() {
         printf '%s\n' "--add-host"
         printf '%s\n' "host.containers.internal:host-gateway"
         podman_run_network_args
-        podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file"
+        podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file" "$env_file"
         podman_run_passthrough_env_args
         printf '%s\n' "-v"
         printf '%s\n' "$results_root:/app/test-results"
@@ -683,6 +709,7 @@ print_doctor() {
     echo "  Rootless runtime: $(rootless_xdg_runtime_dir 2>/dev/null || printf missing)"
     echo "  Rootless container host: $(rootless_container_host 2>/dev/null || printf missing)"
     echo "  Runner service: $TEST_RUNNER_SERVICE"
+    echo "  Runtime env: $(deployed_runtime_env_file 2>/dev/null || printf missing)"
     echo "  Results root: $(resolve_test_results_host_dir)"
     echo "  Image: $TEST_RUNNER_IMAGE"
 
