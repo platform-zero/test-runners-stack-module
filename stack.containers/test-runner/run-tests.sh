@@ -47,6 +47,7 @@ TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
 WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
 WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
+TEST_RUNNER_STATE_ROOT="${TEST_RUNNER_STATE_ROOT:-$WEBSERVICES_ROOTLESS_STATE_ROOT/test-runner}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
 
@@ -212,27 +213,22 @@ rootless_user_env() {
     printf 'CONTAINER_HOST=unix://%s/podman/podman.sock\n' "$runtime_dir"
 }
 
+require_webservices_user() {
+    if [ "$(id -un)" != "$WEBSERVICES_ROOTLESS_USER" ]; then
+        echo -e "${RED}Error:${NC} deployed stack tests must run as $WEBSERVICES_ROOTLESS_USER." >&2
+        echo "Use: ssh webservices-local '$0 <command>'" >&2
+        exit 1
+    fi
+}
+
 rootless_exec() {
     local home env_args=()
+    require_webservices_user
     home="$(rootless_home)"
     mapfile -t env_args < <(rootless_user_env)
-    if [ "$(id -un)" = "$WEBSERVICES_ROOTLESS_USER" ]; then
-        (
-            cd "$home"
-            env "${env_args[@]}" "$@"
-        )
-        return
-    fi
-    if [ "$(id -u)" -eq 0 ]; then
-        (
-            cd "$home"
-            /usr/sbin/runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env "${env_args[@]}" "$@"
-        )
-        return
-    fi
     (
-        cd /tmp
-        sudo -n -u "$WEBSERVICES_ROOTLESS_USER" env "${env_args[@]}" "$@"
+        cd "$home"
+        env "${env_args[@]}" "$@"
     )
 }
 
@@ -319,15 +315,6 @@ resolve_workspace_mount_source() {
     printf '%s\n' "$source"
 }
 
-default_test_results_sibling_dir() {
-    local base_dir="$1"
-    local base_parent base_name
-
-    base_parent="$(dirname "$base_dir")"
-    base_name="$(basename "$base_dir")"
-    printf '%s/%s-test-results\n' "$base_parent" "$base_name"
-}
-
 resolve_test_results_base_dir() {
     local dist_parent=""
     dist_parent="$(dirname "$DIST_DIR")"
@@ -363,7 +350,7 @@ resolve_test_results_host_dir() {
         return 0
     fi
 
-    default_test_results_sibling_dir "$(resolve_test_results_base_dir)"
+    printf '%s\n' "$TEST_RUNNER_STATE_ROOT/results"
 }
 
 resolve_test_runner_components_lock_host_file() {
@@ -741,7 +728,7 @@ run_runner_no_build() {
 
     if [ "$status" -ne 0 ] && [ "$TEST_RUNNER_KEEP_FAILED_CONTAINER" = "1" ]; then
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
-        echo "Inspect with: sudo -u $WEBSERVICES_ROOTLESS_USER podman inspect $(managed_runner_container_name)" >&2
+        echo "Inspect with: podman inspect $(managed_runner_container_name)" >&2
     else
         purge_managed_runner_container
     fi
