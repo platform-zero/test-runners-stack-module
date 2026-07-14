@@ -44,11 +44,11 @@ TEST_RUNNER_KEEP_FAILED_CONTAINER="${TEST_RUNNER_KEEP_FAILED_CONTAINER:-0}"
 DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
+WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
+WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
+WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
-if [ "$TEST_RUNNER_CONTAINER_CLI" = "podman" ] && [ -z "${CONTAINER_HOST:-}" ]; then
-    export CONTAINER_HOST="unix:///run/podman/podman.sock"
-fi
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -155,6 +155,7 @@ print_usage() {
     echo "  slowest [n]       Show slowest Kotlin managed tests from latest logs"
     echo "  failed            Show latest failed Kotlin managed tests"
     echo "  source-unit       Run source-local TypeScript compile and Gradle tests"
+    echo "  doctor            Validate the active Podman release and rootless runner context"
     echo "  all               Run every registered test/check"
     echo ""
     echo -e "${GREEN}Debug:${NC}"
@@ -166,28 +167,113 @@ container_cli() {
     printf '%s\n' "$TEST_RUNNER_CONTAINER_CLI"
 }
 
-ensure_runtime_model_artifacts() {
-    if [ ! -f "$BUNDLE_METADATA_FILE" ] && [ ! -f "$PRIMARY_RUNTIME_MODEL_FILE" ]; then
-        echo -e "${RED}Error:${NC} Bundle metadata not found: $BUNDLE_METADATA_FILE" >&2
-        echo "Generate a Podman bundle first so bundle.json and quadlet outputs are present." >&2
+active_release_dir() {
+    local state_root="$1"
+    local current="$state_root/current"
+    if [ -e "$current" ]; then
+        readlink -f "$current"
+        return 0
+    fi
+    return 1
+}
+
+rootless_release_dir() {
+    active_release_dir "$WEBSERVICES_ROOTLESS_STATE_ROOT"
+}
+
+rootful_release_dir() {
+    active_release_dir "$WEBSERVICES_STATE_ROOT"
+}
+
+rootless_uid() {
+    id -u "$WEBSERVICES_ROOTLESS_USER"
+}
+
+rootless_home() {
+    getent passwd "$WEBSERVICES_ROOTLESS_USER" | cut -d: -f6
+}
+
+rootless_xdg_runtime_dir() {
+    printf '/run/user/%s\n' "$(rootless_uid)"
+}
+
+rootless_container_host() {
+    printf 'unix://%s/podman/podman.sock\n' "$(rootless_xdg_runtime_dir)"
+}
+
+rootless_user_env() {
+    local uid home runtime_dir
+    uid="$(rootless_uid)"
+    home="$(rootless_home)"
+    runtime_dir="/run/user/$uid"
+    printf 'HOME=%s\n' "$home"
+    printf 'XDG_RUNTIME_DIR=%s\n' "$runtime_dir"
+    printf 'DBUS_SESSION_BUS_ADDRESS=unix:path=%s/bus\n' "$runtime_dir"
+    printf 'CONTAINER_HOST=unix://%s/podman/podman.sock\n' "$runtime_dir"
+}
+
+rootless_exec() {
+    local home env_args=()
+    home="$(rootless_home)"
+    mapfile -t env_args < <(rootless_user_env)
+    if [ "$(id -un)" = "$WEBSERVICES_ROOTLESS_USER" ]; then
+        (
+            cd "$home"
+            env "${env_args[@]}" "$@"
+        )
+        return
+    fi
+    if [ "$(id -u)" -eq 0 ]; then
+        (
+            cd "$home"
+            /usr/sbin/runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env "${env_args[@]}" "$@"
+        )
+        return
+    fi
+    (
+        cd /tmp
+        sudo -n -u "$WEBSERVICES_ROOTLESS_USER" env "${env_args[@]}" "$@"
+    )
+}
+
+rootless_podman() {
+    rootless_exec podman "$@"
+}
+
+ensure_podman_release_artifacts() {
+    local rootless_release rootful_release
+    rootless_release="$(rootless_release_dir 2>/dev/null || true)"
+    rootful_release="$(rootful_release_dir 2>/dev/null || true)"
+
+    if [ -z "$rootless_release" ] || [ ! -d "$rootless_release" ]; then
+        echo -e "${RED}Error:${NC} active rootless Podman release not found at $WEBSERVICES_ROOTLESS_STATE_ROOT/current" >&2
+        exit 1
+    fi
+    if [ -z "$rootful_release" ] || [ ! -d "$rootful_release" ]; then
+        echo -e "${RED}Error:${NC} active rootful Podman release not found at $WEBSERVICES_STATE_ROOT/current" >&2
+        exit 1
+    fi
+    if [ ! -f "$rootless_release/build/stack.containers/test-runner/Containerfile" ]; then
+        echo -e "${RED}Error:${NC} test-runner Containerfile missing from active rootless release" >&2
+        exit 1
+    fi
+    if [ ! -f "$rootless_release/runtime/stack.env" ]; then
+        echo -e "${RED}Error:${NC} runtime env missing from active rootless release: $rootless_release/runtime/stack.env" >&2
+        exit 1
+    fi
+    if [ ! -f "$rootless_release/site/components.lock.json" ]; then
+        echo -e "${RED}Error:${NC} component lock missing from active rootless release: $rootless_release/site/components.lock.json" >&2
         exit 1
     fi
 
-    if [ ! -f "$PRIMARY_RUNTIME_MODEL_FILE" ]; then
-        echo -e "${RED}Error:${NC} Runtime model artifact not found: $PRIMARY_RUNTIME_MODEL_FILE" >&2
-        echo "Refresh the bundled runtime models so the managed test-runner can launch its compatibility overlay." >&2
+    if ! rootless_exec test -S "$(rootless_xdg_runtime_dir)/bus"; then
+        echo -e "${RED}Error:${NC} rootless user systemd bus is unavailable for $WEBSERVICES_ROOTLESS_USER" >&2
+        echo "Run Podman bundle readiness first: scripts/verify.sh --ready-only" >&2
         exit 1
     fi
-
-    if [ ! -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" ]; then
-        echo -e "${RED}Error:${NC} Test runner override not found: $TEST_RUNNERS_RUNTIME_MODEL_FILE" >&2
-        echo "Refresh the bundled test-runner compatibility overlay." >&2
-        exit 1
-    fi
-
-    if [ ! -f "$RUNTIME_ENV_FILE" ]; then
-        echo -e "${RED}Error:${NC} Runtime env file not found: $RUNTIME_ENV_FILE" >&2
-        echo "Deploy the bundle first so ./runtime/stack.env is rendered just in time via ./deploy.sh." >&2
+    if ! rootless_exec test -S "$(rootless_xdg_runtime_dir)/podman/podman.sock"; then
+        echo -e "${RED}Error:${NC} rootless Podman socket is unavailable for $WEBSERVICES_ROOTLESS_USER" >&2
+        echo "Start the rootless Podman socket for $WEBSERVICES_ROOTLESS_USER before running deployed tests." >&2
         exit 1
     fi
 }
@@ -256,15 +342,6 @@ resolve_test_results_host_dir() {
     default_test_results_sibling_dir "$(resolve_test_results_base_dir)"
 }
 
-resolve_test_runner_runtime_host_dir() {
-    local runtime_dir
-    runtime_dir="$(dirname "$RUNTIME_ENV_FILE")"
-    (
-        cd "$runtime_dir"
-        pwd -P
-    )
-}
-
 resolve_test_runner_components_lock_host_file() {
     local explicit="${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE_OVERRIDE:-${TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE:-}}"
     if [ -n "$explicit" ]; then
@@ -272,7 +349,11 @@ resolve_test_runner_components_lock_host_file() {
         return 0
     fi
 
+    local rootless_release
+    rootless_release="$(rootless_release_dir 2>/dev/null || true)"
     local candidates=(
+        "$rootless_release/site/components.lock.json"
+        "$rootless_release/build/site/components.lock.json"
         "$DIST_DIR/site/components.lock.json"
         "$(dirname "$DIST_DIR")/build/site/components.lock.json"
         "$RUNTIME_PROJECT_DIR/build/site/components.lock.json"
@@ -293,60 +374,27 @@ resolve_test_runner_components_lock_host_file() {
     printf '%s\n' "/dev/null"
 }
 
-resolve_test_runner_systemd_runtime_host_dir() {
-    local runtime_dir="${TEST_RUNNER_HOST_XDG_RUNTIME_DIR_OVERRIDE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}}"
-
-    if [ "${TEST_RUNNER_REQUIRE_SYSTEMD_RUNTIME:-1}" = "0" ]; then
-        mkdir -p "$runtime_dir"
-        printf '%s\n' "$runtime_dir"
-        return 0
-    fi
-
-    if [ ! -S "$runtime_dir/bus" ]; then
-        echo -e "${RED}Error:${NC} Host user systemd bus is unavailable at $runtime_dir/bus" >&2
-        echo "The managed test-runner now controls runtime-managed services through systemd --user." >&2
-        echo "Ensure lingering is enabled and the user manager is running before invoking run-tests.sh." >&2
-        exit 1
-    fi
-
-    printf '%s\n' "$runtime_dir"
-}
-
-container_contract() {
-    "$(container_cli)" compose "$@"
-}
-
-runtime_model_runner() {
-    ensure_runtime_model_artifacts
-    local components_lock_file
-    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
-    TEST_RESULTS_HOST_DIR="$(resolve_test_results_host_dir)" \
-    TEST_RUNNER_RUNTIME_HOST_DIR="$(resolve_test_runner_runtime_host_dir)" \
-    TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE="$components_lock_file" \
-    TEST_RUNNER_HOST_XDG_RUNTIME_DIR="$(resolve_test_runner_systemd_runtime_host_dir)" \
-    container_contract \
-        --env-file "$RUNTIME_ENV_FILE" \
-        --project-directory "$RUNTIME_PROJECT_DIR" \
-        -f "$PRIMARY_RUNTIME_MODEL_FILE" \
-        -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" \
-        "$@"
-}
-
 build_runner_image() {
-    echo "Building managed test-runner image: $TEST_RUNNER_IMAGE" >&2
-    runtime_model_runner build "$TEST_RUNNER_SERVICE"
+    ensure_podman_release_artifacts
+    local rootless_release
+    rootless_release="$(rootless_release_dir)"
+    echo "Building managed test-runner image in $WEBSERVICES_ROOTLESS_USER Podman: $TEST_RUNNER_IMAGE" >&2
+    rootless_podman build \
+        -t "$TEST_RUNNER_IMAGE" \
+        -f "$rootless_release/build/stack.containers/test-runner/Containerfile" \
+        "$rootless_release/build"
 }
 
 managed_runner_container_name() {
-    printf '%s-%s-1\n' "$RUNTIME_PROJECT_NAME" "$TEST_RUNNER_MANAGED_SERVICE"
+    printf '%s-%s\n' "$RUNTIME_PROJECT_NAME" "$TEST_RUNNER_MANAGED_SERVICE"
 }
 
 purge_managed_runner_container() {
     local container_name
     container_name="$(managed_runner_container_name)"
-    if "$(container_cli)" inspect "$container_name" >/dev/null 2>&1; then
+    if rootless_podman inspect "$container_name" >/dev/null 2>&1; then
         echo "Removing stale managed runner container: $container_name" >&2
-        "$(container_cli)" rm -f "$container_name" >/dev/null 2>&1 || true
+        rootless_podman rm -f "$container_name" >/dev/null 2>&1 || true
     fi
 }
 
@@ -356,7 +404,7 @@ print_managed_runner_failure_diagnostics() {
     container_name="$(managed_runner_container_name)"
 
     if ! inspect_output="$(
-        "$(container_cli)" inspect "$container_name" \
+        rootless_podman inspect "$container_name" \
             --format '{{.State.Status}}|{{.State.Error}}|{{.State.OOMKilled}}|{{.State.FinishedAt}}' \
             2>/dev/null
     )"; then
@@ -391,11 +439,11 @@ repair_dir_ownership() {
 
     uid="$(id -u 2>/dev/null || true)"
     gid="$(id -g 2>/dev/null || true)"
-    if [ -z "$uid" ] || [ -z "$gid" ] || ! command -v "$(container_cli)" >/dev/null 2>&1; then
+    if [ -z "$uid" ] || [ -z "$gid" ] || ! command -v podman >/dev/null 2>&1; then
         return 1
     fi
 
-    "$(container_cli)" run --rm -v "$target:/target" alpine sh -lc "chown -R $uid:$gid /target && chmod -R u+rwX /target" >/dev/null 2>&1
+    rootless_podman run --rm -v "$target:/target" alpine sh -lc "chown -R $uid:$gid /target && chmod -R u+rwX /target" >/dev/null 2>&1
 }
 
 ensure_writable_dir() {
@@ -451,31 +499,143 @@ shell_join_args() {
     printf '%s\n' "$joined"
 }
 
-runtime_model_runner_with_env() {
-    ensure_runtime_model_artifacts
-    local results_root="$1"
-    shift
-    local runtime_root
-    runtime_root="$(resolve_test_runner_runtime_host_dir)"
-    local components_lock_file
-    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
-    local systemd_runtime_root
-    systemd_runtime_root="$(resolve_test_runner_systemd_runtime_host_dir)"
-    local env_assignments=()
-    while [ "$#" -gt 0 ] && [[ "$1" != "--" ]]; do
-        env_assignments+=("$1")
-        shift
-    done
-    if [ "$#" -gt 0 ] && [ "$1" = "--" ]; then
-        shift
-    fi
+rootless_network_names() {
+    rootless_podman network ls --format '{{.Name}}' \
+        | awk -v project="$RUNTIME_PROJECT_NAME" '
+            $0 == project "_rootless_default" { print; next }
+            $0 == project "_rootless_caddy" { print; next }
+            $0 == project "_rootless_postgres" { print; next }
+            $0 == project "_rootless_valkey" { print; next }
+            $0 == project "_rootless_opensearch" { print; next }
+            $0 == project "_rootless_mariadb" { print; next }
+            $0 == project "_rootless_memcached" { print; next }
+            $0 == project "_rootless_monitoring" { print; next }
+            $0 == project "_rootless_pipeline" { print; next }
+            $0 == project "_rootless_qdrant" { print; next }
+            $0 == project "_rootless_matrix-internal" { print; next }
+            $0 == project "_rootless_mastodon-internal" { print; next }
+        ' \
+        | awk '!seen[$0]++'
+}
 
-    env "TEST_RESULTS_HOST_DIR=$results_root" "TEST_RUNNER_RUNTIME_HOST_DIR=$runtime_root" "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file" "TEST_RUNNER_HOST_XDG_RUNTIME_DIR=$systemd_runtime_root" "${env_assignments[@]}" "$(container_cli)" compose \
-        --env-file "$RUNTIME_ENV_FILE" \
-        --project-directory "$RUNTIME_PROJECT_DIR" \
-        -f "$PRIMARY_RUNTIME_MODEL_FILE" \
-        -f "$TEST_RUNNERS_RUNTIME_MODEL_FILE" \
-        "$@"
+require_rootless_networks() {
+    local networks=()
+    mapfile -t networks < <(rootless_network_names)
+    if [ "${#networks[@]}" -eq 0 ]; then
+        echo -e "${RED}Error:${NC} no generated rootless Podman networks found for project $RUNTIME_PROJECT_NAME" >&2
+        exit 1
+    fi
+}
+
+caddy_ca_mount_args() {
+    local rootful_release ca_path
+    rootful_release="$(rootful_release_dir 2>/dev/null || true)"
+    for ca_path in \
+        "$rootful_release/runtime/configs/grafana/caddy-ca.crt" \
+        "$rootful_release/build/stack.config/grafana/caddy-ca.crt"; do
+        if [ -r "$ca_path" ]; then
+            printf '%s\n' "-v"
+            printf '%s\n' "$ca_path:/ca/caddy-ca.crt:ro"
+            return 0
+        fi
+    done
+}
+
+podman_run_network_args() {
+    local network
+    while IFS= read -r network; do
+        [ -n "$network" ] || continue
+        printf '%s\n' "--network"
+        printf '%s\n' "$network"
+    done < <(rootless_network_names)
+}
+
+podman_run_env_args() {
+    local command_line="$1"
+    local rootless_release="$2"
+    local components_lock_file="$3"
+    printf '%s\n' "--env-file"
+    printf '%s\n' "$rootless_release/runtime/stack.env"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_RUNTIME_ROOT=/runtime"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_COMPONENTS_LOCK_FILE=/component-lock/components.lock.json"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_RUNTIME_PROJECT_NAME=$RUNTIME_PROJECT_NAME"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_CONTAINER_CLI=podman"
+    printf '%s\n' "-e"
+    printf '%s\n' "CONTAINER_HOST=$(rootless_container_host)"
+    printf '%s\n' "-e"
+    printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
+    printf '%s\n' "-e"
+    printf '%s\n' "CADDY_URL=${CADDY_URL:-http://host.containers.internal:80}"
+    printf '%s\n' "-e"
+    printf '%s\n' "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file"
+    printf '%s\n' "-e"
+    printf '%s\n' "XDG_RUNTIME_DIR=/host-user-runtime"
+    printf '%s\n' "-e"
+    printf '%s\n' "DBUS_SESSION_BUS_ADDRESS=unix:path=/host-user-runtime/bus"
+}
+
+podman_run_passthrough_env_args() {
+    local assignment
+    for assignment in "${EXEC_ENV_ASSIGNMENTS[@]}"; do
+        printf '%s\n' "-e"
+        printf '%s\n' "$assignment"
+    done
+}
+
+run_podman_test_container() {
+    ensure_podman_release_artifacts
+    require_rootless_networks
+    local results_root="$1"
+    local command_line="$2"
+    shift 2
+    local rootless_release container_name components_lock_file status=0
+    local run_args=()
+    rootless_release="$(rootless_release_dir)"
+    container_name="$(managed_runner_container_name)"
+    components_lock_file="$(resolve_test_runner_components_lock_host_file)"
+
+    mapfile -t run_args < <(
+        printf '%s\n' "run"
+        printf '%s\n' "--name"
+        printf '%s\n' "$container_name"
+        printf '%s\n' "--replace"
+        if [ "$TEST_RUNNER_KEEP_FAILED_CONTAINER" != "1" ]; then
+            printf '%s\n' "--rm"
+        fi
+        printf '%s\n' "--init"
+        printf '%s\n' "--add-host"
+        printf '%s\n' "host.containers.internal:host-gateway"
+        podman_run_network_args
+        podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file"
+        podman_run_passthrough_env_args
+        printf '%s\n' "-v"
+        printf '%s\n' "$results_root:/app/test-results"
+        printf '%s\n' "-v"
+        printf '%s\n' "$rootless_release/build:/runtime:ro"
+        printf '%s\n' "-v"
+        printf '%s\n' "$components_lock_file:/component-lock/components.lock.json:ro"
+        printf '%s\n' "-v"
+        printf '%s\n' "$(rootless_xdg_runtime_dir):/host-user-runtime"
+        printf '%s\n' "-v"
+        printf '%s\n' "$(rootless_xdg_runtime_dir)/podman/podman.sock:/run/podman/podman.sock"
+        caddy_ca_mount_args
+        printf '%s\n' "$TEST_RUNNER_IMAGE"
+        printf '%s\n' "$@"
+    )
+
+    set +e
+    rootless_podman "${run_args[@]}"
+    status=$?
+    set -e
+    return "$status"
 }
 
 print_artifact_paths() {
@@ -509,6 +669,31 @@ print_artifact_paths() {
     echo ""
 }
 
+print_doctor() {
+    local rootless_release rootful_release networks=()
+    rootless_release="$(rootless_release_dir 2>/dev/null || true)"
+    rootful_release="$(rootful_release_dir 2>/dev/null || true)"
+
+    echo -e "${BLUE}Podman test-runner doctor${NC}"
+    echo "  Runtime project: $RUNTIME_PROJECT_NAME"
+    echo "  Rootful release: ${rootful_release:-missing}"
+    echo "  Rootless release: ${rootless_release:-missing}"
+    echo "  Rootless user: $WEBSERVICES_ROOTLESS_USER"
+    echo "  Rootless home: $(rootless_home 2>/dev/null || printf missing)"
+    echo "  Rootless runtime: $(rootless_xdg_runtime_dir 2>/dev/null || printf missing)"
+    echo "  Rootless container host: $(rootless_container_host 2>/dev/null || printf missing)"
+    echo "  Runner service: $TEST_RUNNER_SERVICE"
+    echo "  Results root: $(resolve_test_results_host_dir)"
+    echo "  Image: $TEST_RUNNER_IMAGE"
+
+    ensure_podman_release_artifacts
+    mapfile -t networks < <(rootless_network_names)
+    echo "  Rootless networks:"
+    printf '    %s\n' "${networks[@]}"
+    require_rootless_networks
+    echo -e "${GREEN}Doctor passed.${NC}"
+}
+
 run_runner_no_build() {
     local results_root command_line status=0
     results_root="$(resolve_test_results_host_dir)"
@@ -517,18 +702,11 @@ run_runner_no_build() {
     command_line="$(shell_join_args "$@")"
     purge_managed_runner_container
 
-    runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
-        "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
-        -- \
-        rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
-
-    set +e
-    runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
-        "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
-        -- \
-        up --force-recreate --no-build --pull never --no-deps --abort-on-container-exit --exit-code-from "$TEST_RUNNER_MANAGED_SERVICE" "$TEST_RUNNER_MANAGED_SERVICE"
-    status=$?
-    set -e
+    if run_podman_test_container "$results_root" "$command_line" "$@"; then
+        status=0
+    else
+        status=$?
+    fi
 
     if [ "$status" -ne 0 ]; then
         print_managed_runner_failure_diagnostics "$status"
@@ -536,12 +714,8 @@ run_runner_no_build() {
 
     if [ "$status" -ne 0 ] && [ "$TEST_RUNNER_KEEP_FAILED_CONTAINER" = "1" ]; then
         echo -e "${YELLOW}Preserving failed managed runner container for inspection (TEST_RUNNER_KEEP_FAILED_CONTAINER=1).${NC}" >&2
-        echo "Inspect with: $(container_cli) inspect $(managed_runner_container_name)" >&2
+        echo "Inspect with: sudo -u $WEBSERVICES_ROOTLESS_USER podman inspect $(managed_runner_container_name)" >&2
     else
-        runtime_model_runner_with_env "$results_root" "${EXEC_ENV_ASSIGNMENTS[@]}" \
-            "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line" \
-            -- \
-            rm -fsv "$TEST_RUNNER_MANAGED_SERVICE" >/dev/null 2>&1 || true
         purge_managed_runner_container
     fi
 
@@ -872,7 +1046,7 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
     printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
@@ -884,7 +1058,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -1015,6 +1189,9 @@ case "$COMMAND" in
         ;;
     failed)
         print_failed_tests
+        ;;
+    doctor)
+        print_doctor
         ;;
     all)
         run_all_tests
