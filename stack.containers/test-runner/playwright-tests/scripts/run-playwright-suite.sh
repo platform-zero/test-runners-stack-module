@@ -95,6 +95,14 @@ run_group() {
       require_services caddy keycloak keycloak-auth-gateway
       run_specs "" tests/fast/sso-session.spec.ts
       ;;
+    mobile:smoke)
+      require_services caddy keycloak keycloak-auth-gateway bookstack forgejo grafana homeassistant onboarding portal
+      PW_SKIP_GLOBAL_SETUP=1 run_specs "apex,onboarding,bookstack,forgejo,grafana,homeassistant" tests/fast/mobile-smoke.spec.ts
+      ;;
+    mobile:auth)
+      require_services caddy keycloak mastodon-web mastodon-sidekiq mastodon-streaming
+      PW_SKIP_GLOBAL_SETUP=1 run_specs "mastodon" tests/deep/oidc/mastodon.spec.ts --grep "mobile"
+      ;;
     deep:alertmanager)
       require_services caddy keycloak keycloak-auth-gateway alertmanager
       run_specs "alerts" tests/deep/forward-auth/alertmanager.spec.ts
@@ -258,6 +266,9 @@ run_target() {
       done
       [ "$failed" -eq 0 ]
       ;;
+    mobile)
+      run_group_sequence mobile:smoke mobile:auth
+      ;;
     deep:forward-auth)
       require_services caddy keycloak keycloak-auth-gateway prometheus portal
       run_specs "prometheus,portal" tests/deep/forward-auth/session.spec.ts
@@ -273,7 +284,7 @@ run_target() {
       ;;
     all)
       local failed=0 target rc
-      for target in boundary app-smoke sso deep visual; do
+      for target in boundary app-smoke sso mobile deep visual; do
         printf '\n[playwright-suite] running target %s\n' "$target" >&2
         if run_target "$target"; then
           rc=0

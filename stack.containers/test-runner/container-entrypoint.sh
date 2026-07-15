@@ -221,6 +221,7 @@ run_playwright_e2e_all() {
 boundary|test:e2e:boundary
 app-smoke|test:e2e:app-smoke
 sso|test:e2e:sso
+mobile|test:e2e:mobile
 workflow|test:e2e:workflow
 visual|test:e2e:visual
 EOF_SUITES
@@ -247,6 +248,9 @@ Commands:
   ts-boundary          Run Playwright anonymous boundary tests
   ts-app-smoke         Run Playwright isolated-user app smoke tests
   ts-sso               Run Playwright shared-user SSO smoke tests
+  ts-mobile-smoke      Run Playwright mobile authenticated smoke tests
+  ts-mobile-auth       Run Playwright mobile auth/cookie regression tests
+  ts-mobile            Run all Playwright mobile suites
   ts-e2e-smoke         Alias for ts-app-smoke
   ts-e2e-deep          Run Playwright deep browser flows
   ts-workflow          Alias for ts-e2e-deep
@@ -333,6 +337,18 @@ case "${1:-suite}" in
     ts-sso)
         log "Running Playwright shared-user SSO smoke tests"
         run_playwright_npm test:e2e:sso
+        ;;
+    ts-mobile-smoke)
+        log "Running Playwright mobile authenticated smoke tests"
+        run_playwright_npm test:e2e:mobile-smoke
+        ;;
+    ts-mobile-auth)
+        log "Running Playwright mobile auth/cookie regression tests"
+        run_playwright_npm test:e2e:mobile-auth
+        ;;
+    ts-mobile)
+        log "Running Playwright mobile suites"
+        run_playwright_npm test:e2e:mobile
         ;;
     ts-e2e-smoke)
         log "Running Playwright isolated-user app smoke tests"

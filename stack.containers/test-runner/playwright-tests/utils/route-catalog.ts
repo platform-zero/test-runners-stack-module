@@ -142,7 +142,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     smoke: {
       path: '/books',
       matcher: /\bBooks\b|\bShelves\b|Recently (Created|Updated)|My Recently Viewed|Recent Activity|Recently Updated Pages/i,
-      selector: 'a[href="/books"], a[href="/shelves"], a[href$="/create-book"], .entity-list-item',
+      selector: 'a[href="/books"], a[href="/shelves"], a[href$="/create-book"], .entity-list-item, text=/Books|Knowledge|Procedural Docs/i',
       loginLabel: 'Keycloak',
       disallowMatcher: /\bLog In\b|Log in with Keycloak/i,
       disallowUrlMatcher: /\/login\b/i,
@@ -151,7 +151,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'bookstack-authenticated',
       path: '/books',
       matcher: /\bBooks\b|\bShelves\b|Recently (Created|Updated)|My Recently Viewed|Recent Activity|Recently Updated Pages/i,
-      selector: 'a[href="/books"], a[href="/shelves"], a[href$="/create-book"], .entity-list-item',
+      selector: 'a[href="/books"], a[href="/shelves"], a[href$="/create-book"], .entity-list-item, text=/Books|Knowledge|Procedural Docs/i',
       loginLabel: 'Keycloak',
       disallowMatcher: /\bLog In\b|Log in with Keycloak/i,
       disallowUrlMatcher: /\/login\b/i,
@@ -305,7 +305,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Home Assistant\s+Login|Trusted Networks|select a user|please select a user|forgot password\?|keep me logged in|^log in$/im,
       disallowUrlMatcher: /keycloak|keycloak-auth|\/auth\/(authorize|login_flow|login)/i,
     },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
+    ownership: { route: true, smoke: true, visual: false, deep: false },
   },
   {
     host: 'direct.homeassistant',
@@ -651,6 +651,9 @@ export function isRuntimeExcluded(route: BrowserRoute): boolean {
 export const routeContractRoutes = browserRouteCatalog.filter((route) => route.ownership.route && !isRuntimeExcluded(route));
 export const smokeRoutes = browserRouteCatalog.filter((route) => route.ownership.smoke && !isRuntimeExcluded(route));
 export const visualRoutes = browserRouteCatalog.filter((route) => route.ownership.visual && !isRuntimeExcluded(route));
+export const mobileSmokeRoutes = smokeRoutes.filter((route) =>
+  new Set(['apex', 'onboarding', 'bookstack', 'forgejo', 'grafana', 'homeassistant']).has(route.host)
+);
 
 export function uncataloguedHosts(): string[] {
   const cataloguedHosts = new Set(browserRouteCatalog.map((route) => route.host));

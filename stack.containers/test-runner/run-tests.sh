@@ -137,11 +137,14 @@ print_usage() {
     echo "  ts-boundary       Run Playwright anonymous boundary tests"
     echo "  ts-app-smoke      Run Playwright isolated-user app smoke tests"
     echo "  ts-sso            Run Playwright shared-user SSO smoke tests"
+    echo "  ts-mobile-smoke   Run Playwright mobile authenticated smoke tests"
+    echo "  ts-mobile-auth    Run Playwright mobile auth/cookie regression tests"
+    echo "  ts-mobile         Run all Playwright mobile suites"
     echo "  ts-e2e-smoke      Alias for ts-app-smoke"
     echo "  ts-e2e-deep       Run Playwright deep browser flows"
     echo "  ts-workflow       Alias for ts-e2e-deep"
     echo "  ts-e2e-visual     Run Playwright visual snapshot suite"
-    echo "  ts-e2e-all        Run boundary, app-smoke, SSO, workflow, and visual suites (non fail-fast)"
+    echo "  ts-e2e-all        Run boundary, app-smoke, SSO, mobile, workflow, and visual suites (non fail-fast)"
     echo "  ts-e2e-one <p>    Run one Playwright spec"
     echo "  ts-e2e-name <p>   Run Playwright tests matching a name"
     echo "  ts-ui             Run Playwright in UI mode"
@@ -1063,6 +1066,7 @@ EOF_PLAN
   $((index + 2)). ts-boundary
   $((index + 3)). ts-app-smoke
   $((index + 4)). ts-sso
+  $((index + 5)). ts-mobile
 EOF_PLAN
             ;;
         kt-*|stack-*)
@@ -1127,7 +1131,7 @@ run_registry_target() {
         kt-live-ingestion|stack-live-ingestion) run_runner suite stack-live-ingestion ;;
         kt-recovery|stack-recovery) run_runner suite stack-recovery ;;
         kt-full|stack-full) run_runner suite stack-full ;;
-        ts-unit|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all)
+        ts-unit|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|ts-e2e|ts-e2e-route|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all)
             run_runner "$target" "$@"
             ;;
         ts-e2e-smoke) run_runner ts-app-smoke "$@" ;;
@@ -1225,7 +1229,7 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
     printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
@@ -1237,7 +1241,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -1311,6 +1315,15 @@ case "$COMMAND" in
         ;;
     ts-sso)
         run_runner ts-sso "$@"
+        ;;
+    ts-mobile-smoke)
+        run_runner ts-mobile-smoke "$@"
+        ;;
+    ts-mobile-auth)
+        run_runner ts-mobile-auth "$@"
+        ;;
+    ts-mobile)
+        run_runner ts-mobile "$@"
         ;;
     ts-e2e-smoke)
         run_runner ts-app-smoke "$@"

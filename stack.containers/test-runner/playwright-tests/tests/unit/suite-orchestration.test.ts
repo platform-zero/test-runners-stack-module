@@ -40,6 +40,9 @@ describe('suite orchestration', () => {
     expect(packageJson.scripts?.test).toContain('npm run test:unit || status=$?; npm run test:e2e || status=$?;');
     expect(packageJson.scripts?.['test:e2e']).toContain('run-playwright-suite.sh boundary app-smoke sso');
     expect(packageJson.scripts?.['test:e2e']).not.toContain('&&');
+    expect(packageJson.scripts?.['test:e2e:mobile']).toContain('run-playwright-suite.sh mobile');
+    expect(packageJson.scripts?.['test:e2e:mobile-smoke']).toContain('run-playwright-suite.sh mobile:smoke');
+    expect(packageJson.scripts?.['test:e2e:mobile-auth']).toContain('run-playwright-suite.sh mobile:auth');
   });
 
   it('supports batched Playwright suite targets', () => {

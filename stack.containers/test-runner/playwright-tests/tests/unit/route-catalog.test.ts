@@ -8,6 +8,7 @@ import {
   routeUrl,
   routeUrlPattern,
   smokeRoutes,
+  mobileSmokeRoutes,
   uncataloguedHosts,
   visualRoutes,
 } from '../../utils/route-catalog';
@@ -47,6 +48,17 @@ describe('route-catalog', () => {
 
     expect(invalidSmokeHosts).toEqual([]);
     expect(invalidVisualHosts).toEqual([]);
+  });
+
+  it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
+    expect(mobileSmokeRoutes.map((route) => route.host).sort()).toEqual([
+      'apex',
+      'bookstack',
+      'forgejo',
+      'grafana',
+      'homeassistant',
+      'onboarding',
+    ]);
   });
 
   it('classifies MatrixRTC as a non-UI LiveKit and JWT API route', () => {
