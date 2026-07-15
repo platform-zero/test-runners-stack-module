@@ -1,4 +1,5 @@
 import { execFileSync } from 'child_process';
+import { mkdirSync } from 'fs';
 
 type JupyterContainer = {
   name: string;
@@ -18,6 +19,9 @@ function runContainerCli(args: string[]): string {
   }
   if (cli === 'podman' && env.CONTAINER_HOST) {
     cliArgs.unshift('--remote');
+    env.XDG_RUNTIME_DIR = `${env.HOME || '/tmp'}/.podman-remote-runtime`;
+    mkdirSync(env.XDG_RUNTIME_DIR, { mode: 0o700, recursive: true });
+    delete env.DBUS_SESSION_BUS_ADDRESS;
   }
   return execFileSync(cli, cliArgs, {
     encoding: 'utf-8',

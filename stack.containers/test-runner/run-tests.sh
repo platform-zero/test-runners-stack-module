@@ -47,6 +47,8 @@ TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
 WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
 WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
+TEST_RUNNER_NETWORK_DOMAIN="${TEST_RUNNER_NETWORK_DOMAIN:-webservices}"
+TEST_RUNNER_MANAGED_SOCKET_USER="${TEST_RUNNER_MANAGED_SOCKET_USER:-webservices-test-runners}"
 TEST_RUNNER_STATE_ROOT="${TEST_RUNNER_STATE_ROOT:-$WEBSERVICES_ROOTLESS_STATE_ROOT/test-runner}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
@@ -206,6 +208,18 @@ managed_container_host() {
     printf 'unix:///run/podman/podman.sock\n'
 }
 
+managed_socket_uid() {
+    id -u "$TEST_RUNNER_MANAGED_SOCKET_USER"
+}
+
+managed_socket_home() {
+    getent passwd "$TEST_RUNNER_MANAGED_SOCKET_USER" | cut -d: -f6
+}
+
+managed_socket_runtime_dir() {
+    printf '/run/user/%s\n' "$(managed_socket_uid)"
+}
+
 rootless_user_env() {
     local uid home runtime_dir
     uid="$(rootless_uid)"
@@ -214,7 +228,6 @@ rootless_user_env() {
     printf 'HOME=%s\n' "$home"
     printf 'XDG_RUNTIME_DIR=%s\n' "$runtime_dir"
     printf 'DBUS_SESSION_BUS_ADDRESS=unix:path=%s/bus\n' "$runtime_dir"
-    printf 'CONTAINER_HOST=unix://%s/podman/podman.sock\n' "$runtime_dir"
 }
 
 require_webservices_user() {
@@ -307,8 +320,13 @@ ensure_podman_release_artifacts() {
         exit 1
     fi
     if ! rootless_exec test -S "$(rootless_xdg_runtime_dir)/podman/podman.sock"; then
-        echo -e "${RED}Error:${NC} rootless Podman socket is unavailable for $WEBSERVICES_ROOTLESS_USER" >&2
+        echo -e "${RED}Error:${NC} launch Podman socket is unavailable for $WEBSERVICES_ROOTLESS_USER" >&2
         echo "Start the rootless Podman socket for $WEBSERVICES_ROOTLESS_USER before running deployed tests." >&2
+        exit 1
+    fi
+    if [ ! -S "$(managed_socket_runtime_dir)/podman/podman.sock" ]; then
+        echo -e "${RED}Error:${NC} managed Podman socket is unavailable for $TEST_RUNNER_MANAGED_SOCKET_USER" >&2
+        echo "Start the rootless Podman socket for $TEST_RUNNER_MANAGED_SOCKET_USER before running deployed tests." >&2
         exit 1
     fi
 }
@@ -525,19 +543,19 @@ shell_join_args() {
 
 rootless_network_names() {
     rootless_podman network ls --format '{{.Name}}' \
-        | awk -v project="$RUNTIME_PROJECT_NAME" '
-            $0 == project "_rootless_default" { print; next }
-            $0 == project "_rootless_caddy" { print; next }
-            $0 == project "_rootless_postgres" { print; next }
-            $0 == project "_rootless_valkey" { print; next }
-            $0 == project "_rootless_opensearch" { print; next }
-            $0 == project "_rootless_mariadb" { print; next }
-            $0 == project "_rootless_memcached" { print; next }
-            $0 == project "_rootless_monitoring" { print; next }
-            $0 == project "_rootless_pipeline" { print; next }
-            $0 == project "_rootless_qdrant" { print; next }
-            $0 == project "_rootless_matrix-internal" { print; next }
-            $0 == project "_rootless_mastodon-internal" { print; next }
+        | awk -v project="$RUNTIME_PROJECT_NAME" -v domain="$TEST_RUNNER_NETWORK_DOMAIN" '
+            $0 == project "_" domain "_default" { print; next }
+            $0 == project "_" domain "_caddy" { print; next }
+            $0 == project "_" domain "_postgres" { print; next }
+            $0 == project "_" domain "_valkey" { print; next }
+            $0 == project "_" domain "_opensearch" { print; next }
+            $0 == project "_" domain "_mariadb" { print; next }
+            $0 == project "_" domain "_memcached" { print; next }
+            $0 == project "_" domain "_monitoring" { print; next }
+            $0 == project "_" domain "_pipeline" { print; next }
+            $0 == project "_" domain "_qdrant" { print; next }
+            $0 == project "_" domain "_matrix-internal" { print; next }
+            $0 == project "_" domain "_mastodon-internal" { print; next }
         ' \
         | awk '!seen[$0]++'
 }
@@ -778,9 +796,9 @@ run_podman_test_container() {
         printf '%s\n' "-v"
         printf '%s\n' "$components_lock_file:/component-lock/components.lock.json:ro"
         printf '%s\n' "-v"
-        printf '%s\n' "$(rootless_xdg_runtime_dir):/host-user-runtime"
+        printf '%s\n' "$(managed_socket_runtime_dir):/host-user-runtime"
         printf '%s\n' "-v"
-        printf '%s\n' "$(rootless_xdg_runtime_dir)/podman/podman.sock:/run/podman/podman.sock"
+        printf '%s\n' "$(managed_socket_runtime_dir)/podman/podman.sock:/run/podman/podman.sock"
         caddy_ca_mount_args
         printf '%s\n' "$TEST_RUNNER_IMAGE"
         printf '%s\n' "$@"
@@ -833,10 +851,13 @@ print_doctor() {
     echo "  Runtime project: $RUNTIME_PROJECT_NAME"
     echo "  Rootful release: ${rootful_release:-missing}"
     echo "  Rootless release: ${rootless_release:-missing}"
-    echo "  Rootless user: $WEBSERVICES_ROOTLESS_USER"
-    echo "  Rootless home: $(rootless_home 2>/dev/null || printf missing)"
-    echo "  Rootless runtime: $(rootless_xdg_runtime_dir 2>/dev/null || printf missing)"
-    echo "  Rootless container host: $(rootless_container_host 2>/dev/null || printf missing)"
+    echo "  Launch rootless user: $WEBSERVICES_ROOTLESS_USER"
+    echo "  Launch rootless home: $(rootless_home 2>/dev/null || printf missing)"
+    echo "  Launch rootless runtime: $(rootless_xdg_runtime_dir 2>/dev/null || printf missing)"
+    echo "  Launch container host: $(rootless_container_host 2>/dev/null || printf missing)"
+    echo "  Managed socket user: $TEST_RUNNER_MANAGED_SOCKET_USER"
+    echo "  Managed socket runtime: $(managed_socket_runtime_dir 2>/dev/null || printf missing)"
+    echo "  Managed container host: $(managed_container_host 2>/dev/null || printf missing)"
     echo "  Runner service: $TEST_RUNNER_SERVICE"
     echo "  Runtime env: $(deployed_runtime_env_file 2>/dev/null || printf missing)"
     echo "  Results root: $(resolve_test_results_host_dir)"

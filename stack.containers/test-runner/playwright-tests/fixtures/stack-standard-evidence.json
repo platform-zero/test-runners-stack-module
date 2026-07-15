@@ -804,8 +804,8 @@
           "operatorValue": "Shows real public posts on the social instance."
         },
         {
-          "id": "compose",
-          "title": "Compose Post",
+          "id": "draft",
+          "title": "Draft Post",
           "path": "/publish",
           "actions": [
             {
