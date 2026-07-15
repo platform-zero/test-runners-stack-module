@@ -41,6 +41,7 @@ ntfy
 clickhouse
 models
 forgejo
+websearch
 search
 pipeline
 qbittorrent
