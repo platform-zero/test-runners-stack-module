@@ -481,6 +481,19 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: true, visual: false, deep: true },
   },
   {
+    host: 'websearch',
+    label: 'SearXNG',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    smoke: {
+      matcher: /SearXNG|Webservices Search|Search/i,
+      selector: 'form[action="/search"], input[name="q"], body',
+      disallowMatcher: /Sign in|Log in|Keycloak|Bad Gateway|Service Unavailable|Internal Server Error/i,
+      disallowUrlMatcher: /keycloak|keycloak-auth/i,
+    },
+    ownership: { route: true, smoke: true, visual: false, deep: true },
+  },
+  {
     host: 'seafile',
     label: 'Seafile',
     kind: 'forward_auth',
@@ -633,6 +646,7 @@ const optionalRouteComponents: Record<string, string> = {
   models: 'inference',
   pipeline: 'pipeline',
   search: 'search',
+  websearch: 'searxng',
 };
 
 export function isRuntimeExcluded(route: BrowserRoute): boolean {

@@ -134,6 +134,11 @@
       "source": "test-runners",
       "reason": "route-catalog app smoke harness"
     },
+    "tests/fast/mobile-smoke.spec.ts": {
+      "owner": "test-runners",
+      "source": "test-runners",
+      "reason": "stack-wide mobile browser smoke harness"
+    },
     "tests/fast/onboarding-full-account.spec.ts": {
       "owner": "onboarding",
       "source": "module"
