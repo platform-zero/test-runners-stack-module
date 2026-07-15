@@ -43,4 +43,13 @@ describe('Playwright authenticated success signals', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('only relaxes the observable auth-host redirect when a service-specific authenticated probe exists', () => {
+    const helper = fs.readFileSync(path.join(projectRoot, 'tests/deep/shared/oidc.ts'), 'utf-8');
+    const guardedRelaxations = helper.match(/requireAuthRedirect:\s*!options\.authenticatedProbe/g) ?? [];
+
+    expect(guardedRelaxations).toHaveLength(2);
+    expect(helper).toContain('const authenticated = await options.authenticatedProbe(page)');
+    expect(helper).toContain('Expected authenticated ${serviceName} page but found disallowed state.');
+  });
 });

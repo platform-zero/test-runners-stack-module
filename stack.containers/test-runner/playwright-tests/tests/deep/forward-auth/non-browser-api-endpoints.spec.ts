@@ -10,7 +10,7 @@ function assertNoBrowserSsoRedirect(location: string | null): void {
 test.describe('Non-browser API endpoints', () => {
   test('Element bootstrap endpoint stays app-facing', async ({ request }) => {
     const response = await request.get(serviceUrl('api.element', '/config.json'), { maxRedirects: 0 });
-    expect(response.ok()).toBeTruthy();
+    expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body).toHaveProperty('default_server_config');
   });

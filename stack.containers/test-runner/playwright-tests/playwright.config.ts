@@ -3,6 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 const stackDomain = process.env.DOMAIN || 'datamancy.net';
 const ignoreHttpsErrors = process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === 'true';
 const originBypassHost = process.env.PLAYWRIGHT_ORIGIN_BYPASS_HOST?.trim();
+const runLabel = (process.env.PLAYWRIGHT_RUN_LABEL || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9._-]+/g, '-');
+const artifactPath = (base: string) => runLabel ? `${base}/${runLabel}` : base;
 const hostResolverRules = originBypassHost
   ? [`MAP ${stackDomain} ${originBypassHost}`, `MAP *.${stackDomain} ${originBypassHost}`]
   : [];
@@ -41,9 +45,9 @@ export default defineConfig({
 
   /* Reporter to use */
   reporter: [
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-    ['junit', { outputFile: 'test-results/junit.xml' }],
-    ['json', { outputFile: 'test-results/results.json' }],
+    ['html', { outputFolder: artifactPath('playwright-report'), open: 'never' }],
+    ['junit', { outputFile: `${artifactPath('test-results')}/junit.xml` }],
+    ['json', { outputFile: `${artifactPath('test-results')}/results.json` }],
     ['line'], // Verbose one-line-per-test output with real-time updates
   ],
 
@@ -113,5 +117,5 @@ export default defineConfig({
   ],
 
   /* Folder for test artifacts */
-  outputDir: 'test-results/',
+  outputDir: artifactPath('test-results'),
 });

@@ -82,7 +82,7 @@ export async function loginElementMatrixSession(page: Page): Promise<MatrixSessi
     /All rooms|Home|People|Rooms|Explore|Settings|Chats|Start chat|Recents|Room|Start a chat|Create a room|People|Setting up keys/i,
     ['Keycloak', 'Continue with Keycloak SSO', 'Continue with SSO', 'SSO', 'Single sign-on', 'Sign in with SSO'],
     {
-      disallowPatterns: [/Welcome to Element/i, /Sign in/i, /Create Account/i],
+      disallowPatterns: [/Welcome to Element/i, /Sign in/i, /Create Account/i, /Are you sure\?/i],
       disallowUrlPatterns: [/#\/welcome\b/i, /#\/login\b/i],
       loginPath: serviceUrl('element', '/#/login'),
       loginButtonPatterns: [/sign in|log in|continue with keycloak sso|continue with sso|sso|openid/i],
@@ -120,7 +120,7 @@ export async function loginElementMatrixSession(page: Page): Promise<MatrixSessi
         return Boolean(
           (state.userId && state.homeserverUrl)
           || state.hasAccessToken
-          || /\b(All rooms|People|Rooms|Explore|Settings|Chats|Start chat|Recents|Create a room|Setting up keys|Verify this device)\b|Are you sure\?/i.test(state.bodyText)
+          || /\b(All rooms|People|Rooms|Explore|Settings|Chats|Start chat|Recents|Create a room|Setting up keys|Verify this device)\b/i.test(state.bodyText)
         );
       },
       uiPatternOverride: /Matrix ID|All rooms|People|Rooms|Explore|Settings|Chats|Start chat|Recents|Start a chat|Create a room|Setting up keys/i,
@@ -223,20 +223,21 @@ export async function loginElementMatrixSession(page: Page): Promise<MatrixSessi
         }
 
         const verifyLaterButton = page.getByRole('button', { name: /i'?ll verify later|verify later/i }).first();
-        const areYouSureHeading = page.locator('text=/are you sure\\?/i').first();
+        const areYouSureHeading = page.getByRole('heading', { name: /are you sure\?/i }).first();
         await areYouSureHeading.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
         if ((await areYouSureHeading.isVisible().catch(() => false)) || (await verifyLaterButton.isVisible().catch(() => false))) {
           if (await verifyLaterButton.isVisible().catch(() => false)) {
             await verifyLaterButton.click({ force: true }).catch(() => {});
           } else {
-            const goBackButton = page.getByRole('button', { name: /go back/i }).first();
-            if (await goBackButton.isVisible().catch(() => false)) {
-              await goBackButton.click({ force: true }).catch(() => {});
+            const confirmButton = page.getByRole('button', { name: /continue|skip|verify later|i understand|yes/i }).first();
+            if (await confirmButton.isVisible().catch(() => false)) {
+              await confirmButton.click({ force: true }).catch(() => {});
             } else {
-              await page.keyboard.press('Escape').catch(() => {});
+              throw new Error('Element verification confirmation remained visible without a usable confirmation button.');
             }
           }
           await page.waitForTimeout(1500);
+          await expect(areYouSureHeading).not.toBeVisible({ timeout: 10000 });
         }
 
         const verifyHeading = page.locator('text=/verify this device/i').first();

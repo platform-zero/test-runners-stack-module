@@ -83,7 +83,6 @@ export class OIDCLoginPage {
       }
 
       await target.click({
-        force: true,
         noWaitAfter: true,
       });
       console.log(`   ✓ Clicked OIDC button: ${description}`);

@@ -1,4 +1,4 @@
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium, FullConfig, type Page, type Response } from '@playwright/test';
 import { authArtifactPath, writeJsonAuthArtifact } from '../utils/auth-artifacts';
 import { removeJupyterContainersForUsers } from '../utils/jupyterhub-cleanup';
 import { KeycloakClient } from '../utils/keycloak-client';
@@ -28,6 +28,24 @@ function requireEnv(name: string): string {
   throw new Error(
     `Missing ${name}. Deploy the built bundle and run through ./run-tests.sh, or export STACK_RUNTIME_ENV_FILE=/path/to/runtime/stack.env before direct Playwright usage.`
   );
+}
+
+async function gotoIdentityProvider(page: Page, providerUrl: string): Promise<Response | null> {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await page.goto(providerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const transient = /ERR_NETWORK_CHANGED|ERR_SSL_PROTOCOL_ERROR|ERR_CONNECTION_(?:RESET|CLOSED|REFUSED)/i.test(message);
+      if (!transient || attempt === maxAttempts) {
+        throw error;
+      }
+      console.log(`   Transient identity-provider navigation failure; retrying (${attempt}/${maxAttempts})...`);
+      await page.waitForTimeout(500 * attempt);
+    }
+  }
+  throw new Error('Identity-provider navigation retry loop exhausted unexpectedly.');
 }
 
 async function globalSetup(_config: FullConfig) {
@@ -113,7 +131,7 @@ async function keycloakGlobalSetup() {
   try {
     const providerUrl = identityProvider.authUrl(protectedUrl);
     console.log(`   Connecting to ${identityProvider.label}: ${redactUrlForLogs(providerUrl)}`);
-    const response = await page.goto(providerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await gotoIdentityProvider(page, providerUrl);
     console.log(`   Response status: ${response?.status()}`);
     console.log(`   Current URL: ${redactUrlForLogs(page.url())}`);
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {

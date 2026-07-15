@@ -82,9 +82,7 @@ test('OIDC session works across multiple services', async ({ page }) => {
       await page.locator('input[type="password"]').isVisible({ timeout: 2000 }).catch(() => false);
 
     if (needsAuth) {
-      console.log('   ⚠️  Had to re-authenticate (session not shared)');
-      const keycloakPage = new KeycloakLoginPage(page);
-      await keycloakPage.login(testUser.username, testUser.password);
+      throw new Error('BookStack required credentials again; the Keycloak session was not shared across OIDC clients');
     } else {
       console.log('   ✅ No re-authentication needed - session shared!');
     }
@@ -127,15 +125,17 @@ test('OIDC session works across multiple services', async ({ page }) => {
           await retryButton.click({ force: true }).catch(() => {});
         }
         if (page.url().includes('keycloak') || page.url().includes('keycloak.')) {
-          const keycloakPage = new KeycloakLoginPage(page);
-          await keycloakPage.login(testUser.username, testUser.password).catch(() => {});
+          const passwordPrompt = await page.locator('input[type="password"]').isVisible({ timeout: 2000 }).catch(() => false);
+          if (passwordPrompt) {
+            throw new Error('BookStack retry required Keycloak credentials; shared-session success cannot re-authenticate');
+          }
         }
         await oidcPage.handleConsentScreen().catch(() => {});
         await page.waitForTimeout(1500).catch(() => {});
       }
     }
 
-    expect(verifiedBookStackUi).toBeTruthy();
+    expect(verifiedBookStackUi).toBe(true);
 
     console.log('\n   ✅ OIDC session test complete\n');
   });

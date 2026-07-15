@@ -48,8 +48,9 @@ WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
 WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
 WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
 TEST_RUNNER_NETWORK_DOMAIN="${TEST_RUNNER_NETWORK_DOMAIN:-webservices}"
-TEST_RUNNER_MANAGED_SOCKET_USER="${TEST_RUNNER_MANAGED_SOCKET_USER:-webservices-test-runners}"
+TEST_RUNNER_MANAGED_SOCKET_USER="${TEST_RUNNER_MANAGED_SOCKET_USER:-$WEBSERVICES_ROOTLESS_USER}"
 TEST_RUNNER_STATE_ROOT="${TEST_RUNNER_STATE_ROOT:-$WEBSERVICES_ROOTLESS_STATE_ROOT/test-runner}"
+CADDY_CA_HOST_PATH="${CADDY_CA_HOST_PATH:-/mnt/stack/volumes/caddy_ca/caddy-ca.crt}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
 
@@ -576,6 +577,7 @@ caddy_ca_mount_args() {
     local rootful_release ca_path
     rootful_release="$(rootful_release_dir 2>/dev/null || true)"
     for ca_path in \
+        "$CADDY_CA_HOST_PATH" \
         "$rootful_release/runtime/configs/grafana/caddy-ca.crt" \
         "$rootful_release/build/stack.config/grafana/caddy-ca.crt"; do
         if [ -r "$ca_path" ]; then
@@ -736,7 +738,7 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_RUNTIME_PROJECT_NAME=$RUNTIME_PROJECT_NAME"
     printf '%s\n' "-e"
-    printf '%s\n' "TEST_RUNNER_CONTAINER_CLI=podman"
+    printf '%s\n' "TEST_RUNNER_CONTAINER_CLI=/usr/local/bin/webservices-podman-remote"
     printf '%s\n' "-e"
     printf '%s\n' "CONTAINER_HOST=$(managed_container_host)"
     printf '%s\n' "-e"

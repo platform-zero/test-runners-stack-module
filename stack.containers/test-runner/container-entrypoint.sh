@@ -4,6 +4,7 @@ set -euo pipefail
 
 TEST_USER="pwuser"
 TEST_USER_HOME="/home/${TEST_USER}"
+TEST_USER_RUNTIME_DIR="${TEST_USER_HOME}/.podman-remote-runtime"
 PLAYWRIGHT_DIR="/app/playwright-tests"
 RESULTS_DIR="/app/test-results"
 PLAYWRIGHT_RESULTS_DIR="${RESULTS_DIR}/playwright"
@@ -19,6 +20,10 @@ log() {
 prepare_results_dir() {
     mkdir -p "$RESULTS_DIR"
     chown -R "${TEST_USER}:${TEST_USER}" "$RESULTS_DIR"
+}
+
+prepare_test_user_runtime_dir() {
+    install -d -m 0700 -o "$TEST_USER" -g "$TEST_USER" "$TEST_USER_RUNTIME_DIR"
 }
 
 copy_tree() {
@@ -84,6 +89,8 @@ run_as_test_user() {
             HOME="$TEST_USER_HOME" \
             USER="$TEST_USER" \
             LOGNAME="$TEST_USER" \
+            XDG_RUNTIME_DIR="$TEST_USER_RUNTIME_DIR" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=${TEST_USER_RUNTIME_DIR}/bus" \
             NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$CADDY_CA_TARGET}" \
             SSL_CERT_FILE="${SSL_CERT_FILE:-$CADDY_CA_TARGET}" \
             REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$CADDY_CA_TARGET}" \
@@ -95,6 +102,8 @@ run_as_test_user() {
         HOME="$TEST_USER_HOME" \
         USER="$TEST_USER" \
         LOGNAME="$TEST_USER" \
+        XDG_RUNTIME_DIR="$TEST_USER_RUNTIME_DIR" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${TEST_USER_RUNTIME_DIR}/bus" \
         "$@"
 }
 
@@ -104,6 +113,8 @@ exec_as_test_user() {
             HOME="$TEST_USER_HOME" \
             USER="$TEST_USER" \
             LOGNAME="$TEST_USER" \
+            XDG_RUNTIME_DIR="$TEST_USER_RUNTIME_DIR" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=${TEST_USER_RUNTIME_DIR}/bus" \
             NODE_EXTRA_CA_CERTS="${NODE_EXTRA_CA_CERTS:-$CADDY_CA_TARGET}" \
             SSL_CERT_FILE="${SSL_CERT_FILE:-$CADDY_CA_TARGET}" \
             REQUESTS_CA_BUNDLE="${REQUESTS_CA_BUNDLE:-$CADDY_CA_TARGET}" \
@@ -114,6 +125,8 @@ exec_as_test_user() {
         HOME="$TEST_USER_HOME" \
         USER="$TEST_USER" \
         LOGNAME="$TEST_USER" \
+        XDG_RUNTIME_DIR="$TEST_USER_RUNTIME_DIR" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=${TEST_USER_RUNTIME_DIR}/bus" \
         "$@"
 }
 
@@ -267,6 +280,7 @@ USAGE
 }
 
 prepare_results_dir
+prepare_test_user_runtime_dir
 bootstrap_caddy_ca
 
 case "${1:-suite}" in

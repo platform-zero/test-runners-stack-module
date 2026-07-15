@@ -7,6 +7,7 @@ import { defaultIdentityProvider } from '../identity-provider';
 import type { BrowserTestUser } from '../auth-artifacts';
 import { findRoute, routeUrl, routeUrlPattern } from '../route-catalog';
 import { redactUrlForLogs } from '../telemetry';
+import { inspectVisualEvidence, recordVisualEvidence, visualEvidenceManifestPath } from '../visual-evidence';
 
 import type { AnonymousContract, BrowserRoute, SmokeContract, VisualContract } from '../route-catalog';
 
@@ -263,7 +264,25 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
     if (route.anonymous.kind === 'service_login') {
       await waitForServiceLoginContent(page, route, route.anonymous).catch(() => {});
     }
-    await oidcLogin.clickOIDCButton(loginLabel, { requireAuthRedirect: false });
+    if (route.host === 'donetick') {
+      // Donetick's React button constructs this authorization request in the
+      // browser. Start the same flow explicitly so a fast existing-Keycloak
+      // session cannot be mistaken for an inert click on the native form.
+      const state = `playwright-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await page.evaluate((oauthState) => window.localStorage.setItem('authState', oauthState), state);
+      const authorizationUrl = new URL(
+        '/realms/webservices/protocol/openid-connect/auth',
+        routeUrl(findRoute('keycloak')),
+      );
+      authorizationUrl.searchParams.set('response_type', 'code');
+      authorizationUrl.searchParams.set('client_id', 'donetick');
+      authorizationUrl.searchParams.set('redirect_uri', new URL('/auth/oauth2', routeUrl(route)).toString());
+      authorizationUrl.searchParams.set('scope', 'openid profile email');
+      authorizationUrl.searchParams.set('state', state);
+      await gotoWithRetry(page, authorizationUrl.toString());
+    } else {
+      await oidcLogin.clickOIDCButton(loginLabel, { requireAuthRedirect: false });
+    }
   }
 
   if (defaultIdentityProvider.isConsentUrl(page.url())) {
@@ -277,6 +296,22 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
   }
 
   await page.waitForURL((url) => !defaultIdentityProvider.isAuthUrl(url.toString()), { timeout: 30000 }).catch(() => {});
+
+  if (route.host === 'donetick') {
+    // Donetick performs the authorization-code exchange from its /auth/oauth2
+    // SPA route. Do not navigate to the smoke target until that exchange has
+    // completed, otherwise the navigation aborts the callback request and the
+    // subsequent page merely falls back to the login screen.
+    await expect
+      .poll(
+        () => page.evaluate(() => window.localStorage.getItem('token')),
+        {
+          timeout: 30000,
+          message: 'Donetick OIDC callback should persist an access token before smoke navigation.',
+        },
+      )
+      .not.toBeNull();
+  }
 
   if (route.host === 'bookstack') {
     await recoverBookStackTransientOidcError(page);
@@ -434,19 +469,114 @@ export async function captureVisualSnapshot(
 
   if (typeof visual.prepare === 'function') {
     await visual.prepare(page);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(500);
   }
+
+  if (visual.selector) {
+    const paintedAnchor = smokeSelectorLocator(page, visual.selector).first();
+    await expect.poll(
+      async () => paintedAnchor.evaluate((element) => {
+        let effectiveOpacity = 1;
+        let current: Element | null = element;
+        while (current) {
+          const style = window.getComputedStyle(current);
+          if (style.display === 'none' || style.visibility === 'hidden') {
+            return false;
+          }
+          const opacity = Number.parseFloat(style.opacity);
+          effectiveOpacity *= Number.isFinite(opacity) ? opacity : 1;
+          current = current.parentElement;
+        }
+        const bounds = element.getBoundingClientRect();
+        return effectiveOpacity >= 0.99 && bounds.width > 0 && bounds.height > 0;
+      }),
+      {
+        message: `${route.label} visual anchor must finish painting before screenshot capture`,
+        timeout: 10000,
+      },
+    ).toBe(true);
+  }
+
+  // A visible text contract can become true before client-side entrance
+  // transitions, icons, and card content have painted. Capture only after a
+  // quiet network window and a short paint-settle interval so the evidence is
+  // the rendered application rather than a transient skeleton frame.
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(750);
 
   const screenshotDir = path.join(screenshotRoot, 'visual');
   fs.mkdirSync(screenshotDir, { recursive: true });
   const screenshotPath = path.join(screenshotDir, `${visual.fileStem}.jpeg`);
-  await page.screenshot({
-    path: screenshotPath,
-    type: 'jpeg',
-    quality: visual.quality ?? 85,
-    fullPage: visual.fullPage ?? true,
-  });
+  let screenshot: Buffer | undefined;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    screenshot = await page.screenshot({
+      path: screenshotPath,
+      type: 'jpeg',
+      quality: visual.quality ?? 85,
+      fullPage: visual.fullPage ?? true,
+      animations: 'disabled',
+    });
+    const passesPixelContract = await page.evaluate(async ({ jpegBase64, maxDarkPixelRatio }) => {
+      const image = new Image();
+      const loaded = new Promise<boolean>((resolve) => {
+        image.onload = () => resolve(true);
+        image.onerror = () => resolve(false);
+      });
+      image.src = `data:image/jpeg;base64,${jpegBase64}`;
+      if (!(await loaded)) {
+        return false;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 160;
+      canvas.height = 90;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) {
+        return false;
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let detailedPixels = 0;
+      let darkPixels = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        const brightest = Math.max(red, green, blue);
+        const darkest = Math.min(red, green, blue);
+        if (brightest >= 96 || brightest - darkest >= 36) {
+          detailedPixels += 1;
+        }
+        if (brightest <= 24) {
+          darkPixels += 1;
+        }
+      }
+      const pixelCount = pixels.length / 4;
+      const hasVisibleDetail = detailedPixels / pixelCount >= 0.005;
+      const darkPixelRatio = darkPixels / pixelCount;
+      return hasVisibleDetail && (maxDarkPixelRatio === undefined || darkPixelRatio <= maxDarkPixelRatio);
+    }, {
+      jpegBase64: screenshot.toString('base64'),
+      maxDarkPixelRatio: visual.maxDarkPixelRatio,
+    });
+    if (passesPixelContract) {
+      break;
+    }
+    if (attempt === 3) {
+      throw new Error(`${route.label} screenshot failed its pixel contract after ${attempt} capture attempts`);
+    }
+    await page.waitForTimeout(1000);
+  }
+  if (!screenshot) {
+    throw new Error(`${route.label} screenshot capture did not produce image data`);
+  }
+  const automated = inspectVisualEvidence(screenshot);
+  recordVisualEvidence(
+    visualEvidenceManifestPath(screenshotRoot),
+    route.host,
+    route.label,
+    screenshotPath,
+    automated,
+  );
 
   return screenshotPath;
 }

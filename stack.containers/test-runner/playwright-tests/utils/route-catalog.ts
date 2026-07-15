@@ -29,6 +29,7 @@ export type VisualContract = SmokeContract & {
   fileStem: string;
   fullPage?: boolean;
   quality?: number;
+  maxDarkPixelRatio?: number;
   prepare?: (page: Page) => Promise<void>;
 };
 
@@ -199,10 +200,90 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'service_login', matcher: /\bDonetick\b|\bContinue with Keycloak\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
     visual: {
       fileStem: 'donetick-authenticated',
-      matcher: /\bAll Tasks\b|\bArchived\b|\bThings\b|\bLabels\b|\bProjects\b|\bFilters\b|\bActivities\b|\bPoints\b/i,
-      selector: 'text=/All Tasks|Archived|Things|Labels|Projects|Filters|Activities|Points/i',
+      path: '/chores',
+      matcher: /\bCalendar Overview\b/i,
+      selector: 'text=/Calendar Overview/i',
       loginLabel: 'Keycloak',
-      disallowMatcher: /\bContinue with Keycloak\b|\bLoading\.\.\.|\btaking longer than usual\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bContinue with Keycloak\b|\bSign in to your account\b|\bLoading\.\.\.|\btaking longer than usual\b|\b503 Service Unavailable\b/i,
+      prepare: async (page) => {
+        await page.evaluate(async () => {
+          const token = window.localStorage.getItem('token');
+          if (!token) {
+            throw new Error('Donetick did not persist an access token after OIDC login');
+          }
+
+          const request = async (path: string, init: RequestInit = {}) => {
+            const response = await fetch(path, {
+              ...init,
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                ...(init.headers || {}),
+              },
+            });
+            const text = await response.text();
+            if (!response.ok) {
+              throw new Error(`Donetick fixture request ${init.method || 'GET'} ${path} returned ${response.status}: ${text.slice(0, 240)}`);
+            }
+            return text ? JSON.parse(text) : {};
+          };
+
+          const unwrapList = (value: unknown): Array<Record<string, unknown>> => {
+            if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
+            if (value && typeof value === 'object') {
+              const record = value as Record<string, unknown>;
+              for (const candidate of [record.res, record.projects, record.chores]) {
+                if (Array.isArray(candidate)) return candidate as Array<Record<string, unknown>>;
+              }
+            }
+            return [];
+          };
+
+          let projects = unwrapList(await request('/api/v1/projects'));
+          let project = projects.find((candidate) => candidate.name === 'Northstar Portal Cleanup');
+          if (!project) {
+            const created = await request('/api/v1/projects', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: 'Northstar Portal Cleanup',
+                description: 'Delivery project for deterministic stack visual evidence.',
+                color: '#06b6d4',
+                icon: 'construction',
+              }),
+            });
+            projects = unwrapList(created);
+            project = projects[0]
+              || (created && typeof created === 'object' ? (created as Record<string, unknown>).res as Record<string, unknown> : undefined);
+          }
+          const projectId = Number(project?.id);
+          if (!Number.isInteger(projectId) || projectId <= 0) {
+            throw new Error(`Donetick fixture project did not return a valid id: ${JSON.stringify(project)}`);
+          }
+
+          const chores = unwrapList(await request('/api/v1/chores'));
+          for (const name of ['Verify backup restore drill', 'Update operator runbook']) {
+            if (chores.some((candidate) => candidate.name === name)) continue;
+            await request('/api/v1/chores', {
+              method: 'POST',
+              body: JSON.stringify({
+                name,
+                description: 'Seeded operational work used by the local visual contract.',
+                projectId,
+                assignStrategy: 'no_assignee',
+                frequencyType: 'once',
+                frequency: 1,
+                isActive: true,
+                dueDate: '2026-07-20T09:00:00Z',
+              }),
+            });
+          }
+        });
+
+        await page.goto(new URL('/projects', page.url()).toString(), { waitUntil: 'domcontentloaded' });
+        await page.getByText('Northstar Portal Cleanup', { exact: true }).first().click();
+        await page.getByText('Verify backup restore drill', { exact: true }).waitFor({ timeout: 15000 });
+        await page.getByText('Update operator runbook', { exact: true }).waitFor({ timeout: 15000 });
+      },
     },
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
@@ -220,11 +301,20 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'service_login', matcher: /\bERPNext\b|\bFrappe\b|\bKeycloak\b|\bLogin\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
     visual: {
       fileStem: 'erpnext-authenticated',
-      path: '/app',
-      matcher: /\bERPNext\b|\bFrappe\b|\bDesk\b|\bFramework\b|\bSearch\b|\bWorkspaces\b|\bAccounting\b|\bSelling\b|\bBuying\b|\bStock\b|\bProjects\b/i,
-      selector: 'text=/ERPNext|Frappe|Desk|Framework|Search|Workspaces|Accounting|Selling|Buying|Stock|Projects/i',
+      path: '/app/supplier/Northstar%20Hosting',
+      matcher: /\bNorthstar Hosting\b/i,
+      selector: 'text=/Northstar Hosting/i',
       loginLabel: 'Keycloak',
-      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\bEdit Profile\b|\bReset Password\b|\bManage 3rd party apps\b|\bPublic Profile\b|\bUser visibility\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\bEdit Profile\b|\bReset Password\b|\bManage 3rd party apps\b|\bPublic Profile\b|\bUser visibility\b|\bNot Found\b|\bDoes Not Exist\b|\b503 Service Unavailable\b/i,
+      prepare: async (page) => {
+        const gettingStartedPanel = page.locator('.onb-panel').filter({ hasText: 'Getting Started' }).first();
+        if (!(await gettingStartedPanel.isVisible().catch(() => false))) {
+          return;
+        }
+
+        await gettingStartedPanel.locator('.onb-header-actions button').last().click();
+        await gettingStartedPanel.waitFor({ state: 'hidden', timeout: 5000 });
+      },
     },
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
@@ -282,13 +372,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
     smoke: {
       path: '/d/logs-home/logs',
       selector: 'text=/All Logs|Dashboards|Refresh/i',
-      matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
+      matcher: /(?=[\s\S]*\bAll Logs\b)(?=[\s\S]*\b\d{4}-\d{2}-\d{2}\b)/i,
+      disallowMatcher: /Data source error|Failed to load/i,
     },
     visual: {
       fileStem: 'grafana-authenticated',
       path: '/d/logs-home/logs',
       selector: 'text=/All Logs|Dashboards|Refresh/i',
-      matcher: /\bAll Logs\b|\bLogs\b|Loki|Last 24 hours|Refresh|Dashboards|Explore/i,
+      matcher: /(?=[\s\S]*\bAll Logs\b)(?=[\s\S]*\b\d{4}-\d{2}-\d{2}\b)/i,
+      disallowMatcher: /Data source error|Failed to load/i,
       quality: 85,
       fullPage: false,
     },
@@ -583,9 +675,30 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     visual: {
       fileStem: 'qbittorrent-authenticated',
-      matcher: /northstar-portal-backup\.iso|qBittorrent|Transfers|tracker\.opentrackr|examples/i,
-      selector: 'text=/northstar-portal-backup\\.iso|qBittorrent|Transfers|tracker\\.opentrackr|examples/i',
-      disallowMatcher: /\bSign in to your account\b|\b503 Service Unavailable\b/i,
+      matcher: /northstar-portal-backup\.iso/i,
+      selector: 'text=northstar-portal-backup.iso',
+      disallowMatcher: /\bUsername\b|\bPassword\b|\bLogin\b|\bSign in to your account\b|\b503 Service Unavailable\b/i,
+      prepare: async (page) => {
+        // qBittorrent initially marks the document dark to suppress a bright
+        // startup flash, then removes that marker after loading the configured
+        // light theme. Do not capture the intermediate mixed-theme repaint.
+        await page.waitForFunction(() => !document.documentElement.classList.contains('dark'));
+        // The pointer starts over qBittorrent's File menu, whose hover state
+        // expands over the transfer list. Move it into neutral content and
+        // require the transient menu to close before capturing evidence.
+        await page.mouse.move(800, 250);
+        await page.keyboard.press('Escape');
+        await page.locator('#desktopNavbar li ul').evaluateAll((menus) => {
+          for (const menu of menus) {
+            (menu as HTMLElement).style.setProperty('left', '-999em', 'important');
+          }
+        });
+        await page.waitForFunction(() => {
+          const menu = document.querySelector<HTMLElement>('#desktopNavbar > ul > li:first-child > ul');
+          return menu === null || menu.getBoundingClientRect().right <= 0;
+        });
+      },
+      maxDarkPixelRatio: 0.2,
       quality: 85,
     },
     ownership: { route: true, smoke: false, visual: true, deep: false },

@@ -60,6 +60,7 @@ jest.mock('../../utils/route-catalog', () => ({
 }));
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { KeycloakLoginPage } from '../../pages/KeycloakLoginPage';
 import { OIDCLoginPage } from '../../pages/OIDCLoginPage';
 import type { BrowserRoute } from '../../utils/route-catalog';
@@ -83,6 +84,7 @@ function createLocator(options: { visible?: boolean | boolean[] } = {}) {
     return options.visible ?? true;
   });
   locator.click = jest.fn(async () => undefined);
+  locator.evaluate = jest.fn(async () => true);
 
   return locator;
 }
@@ -134,7 +136,23 @@ function createPage(options: {
       }
     }),
     url: jest.fn(() => state.currentUrl),
-    screenshot: jest.fn(async () => undefined),
+    screenshot: jest.fn(async (screenshotOptions: { path?: string } = {}) => {
+      const image = Buffer.alloc(5000, 1);
+      image[0] = 0xff;
+      image[1] = 0xd8;
+      image[2] = 0xff;
+      image[3] = 0xc0;
+      image.writeUInt16BE(17, 4);
+      image[6] = 8;
+      image.writeUInt16BE(720, 7);
+      image.writeUInt16BE(1280, 9);
+      if (screenshotOptions.path) {
+        fs.mkdirSync(path.dirname(screenshotOptions.path), { recursive: true });
+        fs.writeFileSync(screenshotOptions.path, image);
+      }
+      return image;
+    }),
+    evaluate: jest.fn(async () => true),
   };
 
   return page;
@@ -615,10 +633,44 @@ describe('browser-route-driver', () => {
         type: 'jpeg',
         quality: 90,
         fullPage: false,
+        animations: 'disabled',
       });
       expect(page.setExtraHTTPHeaders).toHaveBeenCalledWith({
         'User-Agent': 'Visual Test Browser',
       });
+      expect(page.waitForLoadState).toHaveBeenCalledWith('networkidle', { timeout: 10000 });
+      expect(page.waitForTimeout).toHaveBeenCalledWith(750);
+      expect(page.locator('#visual-ready').evaluate).toHaveBeenCalled();
+    });
+
+    it('recaptures a frame that fails its pixel contract before recording evidence', async () => {
+      const screenshotRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
+      const page = createPage({
+        locators: {
+          '#visual-ready': createLocator({ visible: true }),
+        },
+        onGoto: (_url, currentPage) => {
+          currentPage.__setUrl('https://visual.datamancy.net/');
+          currentPage.__setBody('Visual Ready');
+        },
+      });
+      page.evaluate.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      const route = createRoute({
+        host: 'visual',
+        label: 'Visual',
+        kind: 'public',
+        visual: {
+          fileStem: 'visual-retry',
+          matcher: /Visual Ready/,
+          selector: '#visual-ready',
+          maxDarkPixelRatio: 0.2,
+        },
+      });
+
+      await captureVisualSnapshot(page, route, user, screenshotRoot);
+
+      expect(page.screenshot).toHaveBeenCalledTimes(2);
+      expect(page.waitForTimeout).toHaveBeenCalledWith(1000);
     });
   });
 });

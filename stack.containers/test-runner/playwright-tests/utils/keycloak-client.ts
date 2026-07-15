@@ -65,6 +65,7 @@ export class KeycloakClient {
   readonly adminUsername: string;
   readonly adminPassword: string;
   private accessToken: string | null = null;
+  private accessTokenExpiresAt = 0;
 
   constructor(options: KeycloakClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
@@ -268,7 +269,7 @@ export class KeycloakClient {
   }
 
   private async adminToken(): Promise<string> {
-    if (this.accessToken) {
+    if (this.accessToken && Date.now() < this.accessTokenExpiresAt) {
       return this.accessToken;
     }
 
@@ -287,11 +288,13 @@ export class KeycloakClient {
       throw new Error(`Keycloak admin token request failed: HTTP ${response.status} ${await response.text()}`);
     }
 
-    const payload = (await response.json()) as { access_token?: string };
+    const payload = (await response.json()) as { access_token?: string; expires_in?: number };
     if (!payload.access_token) {
       throw new Error('Keycloak admin token response did not include access_token.');
     }
     this.accessToken = payload.access_token;
+    const expiresInSeconds = Number.isFinite(payload.expires_in) ? Math.max(1, Number(payload.expires_in)) : 30;
+    this.accessTokenExpiresAt = Date.now() + Math.max(1, expiresInSeconds - 5) * 1000;
     return this.accessToken;
   }
 

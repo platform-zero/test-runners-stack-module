@@ -142,6 +142,30 @@ describe('KeycloakClient', () => {
     expect(unregisterSpy).toHaveBeenCalledWith('playwright-delete-me');
   });
 
+  it('refreshes the admin token before its declared expiry', async () => {
+    const nowSpy = jest.spyOn(Date, 'now');
+    nowSpy.mockReturnValueOnce(1_000).mockReturnValueOnce(57_000).mockReturnValueOnce(57_000);
+    const client = new KeycloakClient({
+      baseUrl: 'http://keycloak:8080',
+      realm: 'webservices',
+      adminUsername: 'admin',
+      adminPassword: 'secret',
+    });
+    fetchMock
+      .mockResolvedValueOnce(okJson({ access_token: 'first-token', expires_in: 60 }))
+      .mockResolvedValueOnce(okJson([{ id: 'first', username: 'first-user' }]))
+      .mockResolvedValueOnce(okJson({ access_token: 'second-token', expires_in: 60 }))
+      .mockResolvedValueOnce(okJson([{ id: 'second', username: 'second-user' }]));
+
+    await client.getUserProfile('first-user');
+    await client.getUserProfile('second-user');
+
+    const tokenRequests = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/protocol/openid-connect/token'));
+    expect(tokenRequests).toHaveLength(2);
+    expect(fetchMock.mock.calls[1][1].headers.authorization).toBe('Bearer first-token');
+    expect(fetchMock.mock.calls[3][1].headers.authorization).toBe('Bearer second-token');
+  });
+
   it('generates Planka-compatible managed usernames', () => {
     const username = KeycloakClient.generateUsername('playwright');
 

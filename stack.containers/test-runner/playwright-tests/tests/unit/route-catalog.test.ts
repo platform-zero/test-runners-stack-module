@@ -121,9 +121,10 @@ describe('route-catalog', () => {
     }
   });
 
-  it('uses stable visual targets for SOGo and Donetick', () => {
+  it('uses stable, populated visual targets for SOGo, Donetick, and ERPNext', () => {
     const sogo = findRoute('sogo');
     const donetick = findRoute('donetick');
+    const erpnext = findRoute('erpnext');
 
     expect(sogo.visual?.pathForUser?.({
       username: 'pw-test',
@@ -133,9 +134,32 @@ describe('route-catalog', () => {
     expect(sogo.visual?.selector).toBeUndefined();
     expect(sogo.visual?.matcher.test('Calendar | webservices Mail')).toBe(true);
 
-    expect(donetick.visual?.matcher.test('Loading... This is taking longer than usual.')).toBe(false);
+    expect(donetick.visual?.path).toBe('/chores');
+    expect(donetick.visual?.matcher.test('Calendar Overview')).toBe(true);
+    expect(donetick.visual?.disallowMatcher?.test('Sign in to your account')).toBe(true);
     expect(donetick.visual?.disallowMatcher?.test('Loading... This is taking longer than usual.')).toBe(true);
-    expect(donetick.visual?.matcher.test('All Tasks\nArchived\nThings\nLabels')).toBe(true);
+    expect(donetick.visual?.prepare).toBeDefined();
+
+    expect(erpnext.visual?.path).toBe('/app/supplier/Northstar%20Hosting');
+    expect(erpnext.visual?.matcher.test('Framework Quality')).toBe(false);
+    expect(erpnext.visual?.matcher.test('Northstar Hosting')).toBe(true);
+    expect(erpnext.visual?.disallowMatcher?.test('Login to Frappe')).toBe(true);
+    expect(erpnext.visual?.prepare).toBeDefined();
+  });
+
+  it('rejects empty Grafana logs and qBittorrent native-login false positives', () => {
+    const grafana = findRoute('grafana');
+    const qbittorrent = findRoute('qbittorrent');
+
+    expect(grafana.visual?.matcher.test('All Logs 2026-07-15 18:50:42 INFO')).toBe(true);
+    expect(grafana.visual?.matcher.test('All Logs No data')).toBe(false);
+    expect(grafana.visual?.disallowMatcher?.test('No data')).toBe(false);
+    expect(grafana.visual?.disallowMatcher?.test('Data source error')).toBe(true);
+    expect(qbittorrent.visual?.matcher.test('qBittorrent WebUI Username Password Login')).toBe(false);
+    expect(qbittorrent.visual?.disallowMatcher?.test('qBittorrent WebUI Username Password Login')).toBe(true);
+    expect(qbittorrent.visual?.matcher.test('northstar-portal-backup.iso')).toBe(true);
+    expect(qbittorrent.visual?.prepare).toBeDefined();
+    expect(qbittorrent.visual?.maxDarkPixelRatio).toBe(0.2);
   });
 
   it('reads host inventory from an explicit file and strips comments', () => {
