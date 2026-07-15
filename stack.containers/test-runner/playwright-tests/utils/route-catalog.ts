@@ -494,6 +494,26 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: true, visual: false, deep: true },
   },
   {
+    host: 'spawner',
+    label: 'Workload Spawner',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    smoke: {
+      matcher: /Workload Spawner|instances|templates|spawner/i,
+      selector: 'body',
+      disallowMatcher: /Sign in|Log in|Keycloak|Bad Gateway|Service Unavailable|Internal Server Error/i,
+      disallowUrlMatcher: /keycloak|keycloak-auth/i,
+    },
+    ownership: { route: true, smoke: true, visual: false, deep: true },
+  },
+  {
+    host: '*.apps',
+    label: 'Workload Apps Wildcard',
+    kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
     host: 'seafile',
     label: 'Seafile',
     kind: 'forward_auth',
@@ -647,6 +667,8 @@ const optionalRouteComponents: Record<string, string> = {
   pipeline: 'pipeline',
   search: 'search',
   websearch: 'searxng',
+  spawner: 'workload-spawner',
+  '*.apps': 'workload-spawner',
 };
 
 export function isRuntimeExcluded(route: BrowserRoute): boolean {

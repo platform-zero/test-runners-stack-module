@@ -42,6 +42,8 @@ clickhouse
 models
 forgejo
 websearch
+spawner
+*.apps
 search
 pipeline
 qbittorrent
