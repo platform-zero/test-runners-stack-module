@@ -260,7 +260,18 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
 
   if (oidcStartPath && !defaultIdentityProvider.isAuthUrl(page.url())) {
     await gotoWithRetry(page, routeUrl(route, oidcStartPath));
-  } else if (!defaultIdentityProvider.isAuthUrl(page.url())) {
+    const successUrlMatcher = route.smoke?.oidcStartSuccessUrlMatcher;
+    if (successUrlMatcher) {
+      await page.waitForURL((url) => successUrlMatcher.test(url.toString()), { timeout: 15000 }).catch(() => {});
+    }
+    if (
+      successUrlMatcher?.test(page.url()) ||
+      await isSmokeReady(page, route.smoke as SmokeContract).catch(() => false)
+    ) {
+      return;
+    }
+  }
+  if (!defaultIdentityProvider.isAuthUrl(page.url())) {
     if (route.anonymous.kind === 'service_login') {
       await waitForServiceLoginContent(page, route, route.anonymous).catch(() => {});
     }
@@ -426,12 +437,26 @@ export async function assertSmokeContract(page: Page, route: BrowserRoute, user:
 
   if (route.kind === 'oidc_login') {
     const loginLabel = route.smoke.loginLabel || defaultIdentityProvider.label;
+    if (route.host === 'keycloak') {
+      await waitForSmokeReady(page, route.smoke, route);
+      return;
+    }
     const alreadyReady = await isSmokeReady(page, route.smoke).catch(() => false);
 
     if (!alreadyReady) {
-      await completeOidcLogin(page, route, loginLabel, user);
-      if (targetPath) {
-        await gotoWithRetry(page, routeUrl(route, targetPath));
+      let readyAfterPreAuthenticate = false;
+      if (typeof route.smoke.preAuthenticate === 'function') {
+        await route.smoke.preAuthenticate(page, user);
+        readyAfterPreAuthenticate = await isSmokeReady(page, route.smoke).catch(() => false);
+      }
+      if (!readyAfterPreAuthenticate) {
+        await completeOidcLogin(page, route, loginLabel, user);
+        if (typeof route.smoke.postAuthenticate === 'function') {
+          await route.smoke.postAuthenticate(page, user);
+        }
+        if (targetPath) {
+          await gotoWithRetry(page, routeUrl(route, targetPath));
+        }
       }
     }
 
@@ -462,13 +487,16 @@ export async function captureVisualSnapshot(
     disallowUrlMatcher: visual.disallowUrlMatcher,
     headers: visual.headers,
     oidcStartPath: visual.oidcStartPath,
+    oidcStartSuccessUrlMatcher: visual.oidcStartSuccessUrlMatcher,
     pathForUser: visual.pathForUser,
+    preAuthenticate: visual.preAuthenticate,
+    postAuthenticate: visual.postAuthenticate,
   };
 
   await assertSmokeContract(page, { ...route, smoke: effectiveSmoke }, user);
 
   if (typeof visual.prepare === 'function') {
-    await visual.prepare(page);
+    await visual.prepare(page, user);
   }
 
   if (visual.selector) {

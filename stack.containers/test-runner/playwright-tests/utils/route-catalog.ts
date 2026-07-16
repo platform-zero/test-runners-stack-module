@@ -23,6 +23,9 @@ export type SmokeContract = {
   disallowUrlMatcher?: RegExp;
   headers?: Record<string, string>;
   oidcStartPath?: string;
+  oidcStartSuccessUrlMatcher?: RegExp;
+  preAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
+  postAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
 };
 
 export type VisualContract = SmokeContract & {
@@ -30,7 +33,7 @@ export type VisualContract = SmokeContract & {
   fullPage?: boolean;
   quality?: number;
   maxDarkPixelRatio?: number;
-  prepare?: (page: Page) => Promise<void>;
+  prepare?: (page: Page, user: { username: string; email: string }) => Promise<void>;
 };
 
 export type BrowserRoute = {
@@ -186,10 +189,30 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jellyfin-authenticated',
       matcher: /\bJellyfin\b|\bStack Media\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b/i,
-      selector: 'text=/Jellyfin|Stack Media|Dashboard|Home|Favorites|Libraries/i',
+      selector: 'text=My Media',
       loginLabel: 'Keycloak',
       oidcStartPath: '/sso/OID/start/keycloak',
-      disallowMatcher: /\bWelcome to Jellyfin\b|\bset up your server\b|\bPlease select your preferred language\b|\bNothing here\b|create a library|\b503 Service Unavailable\b/i,
+      oidcStartSuccessUrlMatcher: /#\/home\b/i,
+      disallowMatcher: /\b503 Service Unavailable\b/i,
+      disallowUrlMatcher: /#\/(?:login|wizard|selectserver)\b/i,
+      prepare: async (page) => {
+        await page.waitForFunction(() => {
+          const visible = (element: Element): boolean => {
+            const bounds = element.getBoundingClientRect();
+            return bounds.width > 40 && bounds.height > 40;
+          };
+          const loadedBackgrounds = Array.from(document.querySelectorAll<HTMLElement>('.cardImageContainer, .cardImage'))
+            .filter((element) => {
+              if (!visible(element)) return false;
+              const style = window.getComputedStyle(element);
+              return style.backgroundImage.startsWith('url(')
+                && !/(?:data:image|blurhash)/i.test(style.backgroundImage)
+                && style.filter === 'none';
+            });
+          return loadedBackgrounds.length >= 4;
+        }, undefined, { timeout: 15000 });
+        await page.waitForTimeout(2000);
+      },
     },
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
@@ -292,7 +315,22 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'Huly',
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
-    ownership: { route: false, smoke: false, visual: false, deep: false },
+    visual: {
+      fileStem: 'huly-authenticated',
+      matcher: /Platform|Sign Up|Log In|Forgot your password|Continue as a guest/i,
+      selector: 'text=/Sign Up|Log In|Continue as a guest/i',
+      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
+      prepare: async (page, user) => {
+        const credentials = page.getByRole('textbox');
+        await credentials.first().fill(user.email);
+        await credentials.nth(1).fill('visual-review-only');
+        await page.getByText('Required field Email', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
+        await page.getByText('Required field Password', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: false },
   },
   {
     host: 'erpnext',
@@ -330,7 +368,65 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'Element',
     kind: 'oidc_login',
     anonymous: { kind: 'service_login', matcher: /\bElement\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'element-authenticated',
+      matcher: /Matrix ID|All rooms|People|Rooms|Explore|Settings|Chats|Start chat|Recents|Create a room|Setting up keys|Verify this device/i,
+      selector: 'body',
+      loginLabel: 'Keycloak SSO',
+      disallowMatcher: /Welcome to Element|Sign in\s+Homeserver|Create Account|503 Service Unavailable|Bad Gateway/i,
+      disallowUrlMatcher: /#\/(?:welcome|login)\b/i,
+      preAuthenticate: async (page) => {
+        const signIn = page.getByRole('link', { name: /sign in/i }).or(page.getByRole('button', { name: /sign in/i })).first();
+        if (await signIn.isVisible().catch(() => false)) {
+          await signIn.click({ force: true });
+          await page.waitForTimeout(750);
+        }
+        const sso = page.getByRole('button', { name: /continue with keycloak sso|sign in with sso|continue with sso|single sign-on/i })
+          .or(page.getByRole('link', { name: /continue with keycloak sso|sign in with sso|continue with sso|single sign-on/i }))
+          .first();
+        await sso.waitFor({ state: 'visible', timeout: 30000 }).catch(() => {});
+        if (await sso.isVisible().catch(() => false)) {
+          await sso.click({ force: true, noWaitAfter: true });
+          await page.waitForURL((url) => /keycloak|keycloak-auth/i.test(url.toString()), { timeout: 15000 }).catch(() => {});
+        }
+      },
+      postAuthenticate: async (page) => {
+        const createAccount = page.getByRole('button', { name: /create account/i }).first();
+        if (await createAccount.isVisible().catch(() => false)) {
+          await createAccount.click({ force: true });
+          await page.waitForTimeout(1000);
+        }
+        const continueButton = page.getByRole('button', { name: /^continue$/i }).first();
+        if (await continueButton.isVisible().catch(() => false)) {
+          await continueButton.click({ force: true });
+          await page.waitForTimeout(1500);
+        }
+        const verifyLater = page.getByRole('button', { name: /i'?ll verify later|verify later|skip verification/i }).first();
+        if (await verifyLater.isVisible().catch(() => false)) {
+          await verifyLater.click({ force: true });
+          await page.waitForTimeout(750);
+          const confirm = page.getByRole('button', { name: /continue|skip|verify later|i understand|yes/i }).first();
+          if (await confirm.isVisible().catch(() => false)) {
+            await confirm.click({ force: true });
+          }
+        }
+      },
+      prepare: async (page) => {
+        const dismissNotifications = page.getByRole('button', { name: /^dismiss$/i }).first();
+        if (await dismissNotifications.isVisible().catch(() => false)) {
+          await dismissNotifications.click({ force: true });
+        }
+        const acknowledgeThreads = page.getByRole('button', { name: /^(?:ok|got it)$/i }).first();
+        if (await acknowledgeThreads.isVisible().catch(() => false)) {
+          await acknowledgeThreads.click({ force: true });
+        }
+        await page.getByText(/Enable desktop notifications|Threads Activity Centre/i).first()
+          .waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'api.element',
@@ -397,7 +493,16 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Home Assistant\s+Login|Trusted Networks|select a user|please select a user|forgot password\?|keep me logged in|^log in$/im,
       disallowUrlMatcher: /keycloak|keycloak-auth|\/auth\/(authorize|login_flow|login)/i,
     },
-    ownership: { route: true, smoke: true, visual: false, deep: false },
+    visual: {
+      fileStem: 'homeassistant-authenticated',
+      matcher: /Overview|Developer Tools|History|Logbook|Automations|Devices|Areas|Integrations|Energy|Settings|Map|Media/i,
+      selector: 'body',
+      disallowMatcher: /Home Assistant\s+Login|Trusted Networks|select a user|please select a user|forgot password\?|keep me logged in|503 Service Unavailable/i,
+      disallowUrlMatcher: /keycloak|keycloak-auth|\/auth\/(authorize|login_flow|login)/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: true, visual: true, deep: false },
   },
   {
     host: 'direct.homeassistant',
@@ -435,12 +540,25 @@ export const browserRouteCatalog: BrowserRoute[] = [
   {
     host: 'keycloak',
     label: 'Keycloak Portal',
-    kind: 'non_ui',
+    kind: 'oidc_login',
     anonymous: {
-      kind: 'non_ui',
-      reason: 'Identity provider host; covered by Keycloak OIDC smoke tests.',
+      kind: 'service_login',
+      path: '/realms/webservices/account/',
+      matcher: /Sign in to your account|Keycloak/i,
+      loginLabel: 'Keycloak',
+      allowAuthRedirect: true,
     },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
+    visual: {
+      fileStem: 'keycloak-account-authenticated',
+      path: '/realms/webservices/account/',
+      matcher: /Personal info|Account security|Applications|Device activity|Linked accounts/i,
+      selector: 'body',
+      loginLabel: 'Keycloak',
+      disallowMatcher: /Sign in to your account|Invalid username or password|503 Service Unavailable/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'keycloak-auth',
@@ -468,14 +586,43 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth', path: '/user-redirect/lab' },
     path: '/user-redirect/lab',
-    ownership: { route: true, smoke: false, visual: false, deep: false },
+    visual: {
+      fileStem: 'jupyterhub-authenticated',
+      path: '/user-redirect/lab',
+      matcher: /JupyterLab|Launcher|Notebook|Console|Terminal|File Browser/i,
+      selector: '.jp-LabShell, text=/JupyterLab|Launcher|Notebook|Console|Terminal/i',
+      disallowMatcher: /Start My Server|503 Service Unavailable|Bad Gateway|Unauthorized/i,
+      prepare: async (page) => {
+        const declineNews = page.getByRole('button', { name: /^no$/i }).first();
+        if (await declineNews.isVisible().catch(() => false)) {
+          await declineNews.evaluate((element) => (element as HTMLElement).click());
+        } else {
+          const closeNews = page.getByRole('button', { name: /close/i }).first();
+          if (await closeNews.isVisible().catch(() => false)) {
+            await closeNews.evaluate((element) => (element as HTMLElement).click());
+          }
+        }
+        await page.getByText(/receive official Jupyter news/i).first()
+          .waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'kopia',
     label: 'Kopia',
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'kopia-authenticated',
+      matcher: /Kopia|Snapshots|Repository|Policies|Tasks/i,
+      selector: 'body',
+      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway/i,
+      quality: 85,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'mail',
@@ -489,7 +636,19 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'Mastodon',
     kind: 'oidc_login',
     anonymous: { kind: 'public_page', matcher: /\bMastodon\b|To use the Mastodon web application, please enable JavaScript/i },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'mastodon-authenticated',
+      path: '/home',
+      matcher: /What's on your mind|Compose new post|Publish|Home|Notifications|Profile setup|Save and continue|Display name/i,
+      selector: 'body',
+      loginLabel: 'OpenID Connect',
+      oidcStartPath: '/auth/sign_in',
+      disallowMatcher: /You need to log in|Login or Register|Create account|Log in to Mastodon|Invalid state|503 Service Unavailable|Bad Gateway/i,
+      disallowUrlMatcher: /\/(?:explore|about|public|auth\/sign_in)\b/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'matrix',
@@ -517,7 +676,26 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'ntfy',
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'ntfy-authenticated',
+      matcher: /ntfy|Notifications|Subscribe|All notifications/i,
+      selector: 'body',
+      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway/i,
+      prepare: async (page) => {
+        await page.evaluate(() => {
+          const pattern = /notifications are blocked|enable notifications/i;
+          for (const node of Array.from(document.querySelectorAll<HTMLElement>('body *'))) {
+            if (pattern.test(node.innerText || '') && !Array.from(node.children).some((child) => pattern.test((child as HTMLElement).innerText || ''))) {
+              const banner = node.closest<HTMLElement>('[role="alert"], [role="status"], .banner, .alert, .notification') ?? node;
+              banner.style.display = 'none';
+            }
+          }
+        });
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'onlyoffice',
@@ -550,14 +728,33 @@ export const browserRouteCatalog: BrowserRoute[] = [
     kind: 'oidc_login',
     anonymous: { kind: 'service_login', matcher: /(?=.*\bPlanka\b)(?=.*(?:Log in with SSO|OIDC|Keycloak|\bLog in\b))/is, loginLabel: 'Keycloak', allowAuthRedirect: true, path: '/login' },
     path: '/login',
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'planka-authenticated',
+      matcher: /Planka|Playwright User|Boards|Projects|Create project|Notifications|Account/i,
+      selector: 'body',
+      loginLabel: 'SSO',
+      disallowMatcher: /Log in to Planka|Log in with SSO|E-mail or username|Consent Request|503 Service Unavailable/i,
+      disallowUrlMatcher: /\/login\b/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'prometheus',
     label: 'Prometheus',
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'prometheus-authenticated',
+      path: '/query',
+      matcher: /Prometheus|Query|Execute|Alerts|Graph/i,
+      selector: 'body',
+      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'search',
@@ -583,7 +780,16 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Sign in|Log in|Keycloak|Bad Gateway|Service Unavailable|Internal Server Error/i,
       disallowUrlMatcher: /keycloak|keycloak-auth/i,
     },
-    ownership: { route: true, smoke: true, visual: false, deep: true },
+    visual: {
+      fileStem: 'searxng-authenticated',
+      matcher: /SearXNG|Webservices Search|Search/i,
+      selector: 'form[action="/search"], input[name="q"], body',
+      disallowMatcher: /Sign in|Log in|Keycloak|Bad Gateway|Service Unavailable|Internal Server Error/i,
+      disallowUrlMatcher: /keycloak|keycloak-auth/i,
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: true, visual: true, deep: true },
   },
   {
     host: 'spawner',
@@ -610,14 +816,66 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'Seafile',
     kind: 'forward_auth',
     anonymous: { kind: 'forward_auth' },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'seafile-authenticated',
+      matcher: /Seafile|Libraries|My Libraries|Shared with me|Favorites|Shared Links|Devices|Wiki/i,
+      selector: 'text=/Libraries|My Libraries|Shared with me|Favorites/i',
+      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway/i,
+      prepare: async (page) => {
+        const welcome = page.locator('[role="dialog"], .modal-dialog, .ReactModal__Content').filter({ hasText: /Welcome to Seafile/i }).first();
+        if (await welcome.isVisible().catch(() => false)) {
+          const close = welcome.locator('button[aria-label*="close" i], button.close, .sf2-icon-x1').first();
+          if (await close.isVisible().catch(() => false)) {
+            await close.click({ force: true });
+          } else {
+            await page.keyboard.press('Escape');
+          }
+        }
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'vaultwarden',
     label: 'Vaultwarden',
     kind: 'oidc_login',
     anonymous: { kind: 'service_login', matcher: /(?=.*(?:Vaultwarden|Bitwarden|Web Vault))(?=.*(?:Single sign-on|Use single sign-on|SSO|Log in))/is, loginLabel: 'Single sign-on', allowAuthRedirect: true },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
+    visual: {
+      fileStem: 'vaultwarden-authenticated',
+      matcher: /My Vault|Vaults|Folders|Items|Search vault|Join organization|Create account|Set initial password/i,
+      selector: 'body',
+      loginLabel: 'Single sign-on',
+      disallowMatcher: /SSO identifier|Use single sign-on|Log in|\bLoading\b|503 Service Unavailable|Bad Gateway/i,
+      disallowUrlMatcher: /#\/(?:sso|login)\b|\/sso\b/i,
+      preAuthenticate: async (page, user) => {
+        const identifier = process.env.VAULTWARDEN_ORG_ID?.trim() || user.email.split('@').pop() || stackDomain;
+        const ssoEntry = page.getByRole('button', { name: /use single sign-on|single sign-on|sso/i }).first();
+        if (await ssoEntry.isVisible().catch(() => false)) {
+          await ssoEntry.click({ force: true });
+          await page.waitForTimeout(500);
+        }
+        if (!/#\/sso\b/i.test(page.url())) {
+          await page.goto(`${routeUrl(findRoute('vaultwarden'))}#/sso?identifier=${encodeURIComponent(identifier)}`, { waitUntil: 'domcontentloaded' });
+        }
+        const input = page.getByLabel(/sso identifier/i)
+          .or(page.locator('input[placeholder*="SSO"], input[id*="bit-input"]')).first();
+        if (await input.isVisible().catch(() => false)) {
+          await input.fill(identifier, { force: true });
+          const continueButton = page.getByRole('button', { name: /continue/i }).first();
+          if (await continueButton.isVisible().catch(() => false)) {
+            await continueButton.click({ force: true });
+          } else {
+            await input.press('Enter');
+          }
+        }
+        await page.waitForURL((url) => /keycloak|identity\/connect\/authorize/i.test(url.toString()), { timeout: 20000 }).catch(() => {});
+      },
+      quality: 85,
+      fullPage: false,
+    },
+    ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
     host: 'www',
@@ -698,7 +956,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
           return menu === null || menu.getBoundingClientRect().right <= 0;
         });
       },
-      maxDarkPixelRatio: 0.2,
+      maxDarkPixelRatio: 0.05,
       quality: 85,
     },
     ownership: { route: true, smoke: false, visual: true, deep: false },
@@ -799,6 +1057,37 @@ export function isRuntimeExcluded(route: BrowserRoute): boolean {
 
 export const routeContractRoutes = browserRouteCatalog.filter((route) => route.ownership.route && !isRuntimeExcluded(route));
 export const smokeRoutes = browserRouteCatalog.filter((route) => route.ownership.smoke && !isRuntimeExcluded(route));
+export const browserWuiHosts = [
+  'apex',
+  'onboarding',
+  'alerts',
+  'bookstack',
+  'sogo',
+  'jellyfin',
+  'donetick',
+  'huly',
+  'erpnext',
+  'element',
+  'forgejo',
+  'grafana',
+  'homeassistant',
+  'portal',
+  'keycloak',
+  'jupyterhub',
+  'kopia',
+  'mastodon',
+  'ntfy',
+  'pipeline',
+  'planka',
+  'prometheus',
+  'websearch',
+  'seafile',
+  'vaultwarden',
+  'qbittorrent',
+] as const;
+export const browserWuiRoutes = browserWuiHosts
+  .map((host) => findRoute(host))
+  .filter((route) => !isRuntimeExcluded(route));
 export const visualRoutes = browserRouteCatalog.filter((route) => route.ownership.visual && !isRuntimeExcluded(route));
 export const mobileSmokeRoutes = smokeRoutes.filter((route) =>
   new Set(['apex', 'onboarding', 'bookstack', 'forgejo', 'grafana', 'homeassistant']).has(route.host)

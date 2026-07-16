@@ -255,15 +255,11 @@ run_group() {
       ;;
     visual:portal)
       require_services caddy keycloak keycloak-auth-gateway portal
-      run_specs "apex,portal" tests/visual/smoke-visual.spec.ts tests/visual/portal-role-dashboards.spec.ts
+      run_specs "apex,keycloak,portal" tests/visual/smoke-visual.spec.ts tests/visual/portal-role-dashboards.spec.ts
       ;;
     visual:apps)
-      local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal)
-      hosts="alerts,bookstack,forgejo,grafana,onboarding,portal"
-      if component_selected search; then
-        services+=(opensearch)
-        hosts="${hosts},search"
-      fi
+      local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack element forgejo grafana huly onboarding portal searxng)
+      hosts="alerts,bookstack,element,forgejo,grafana,huly,onboarding,portal,websearch"
       if component_selected pipeline; then
         services+=(airflow-webserver airflow-scheduler ingestion-runner)
         hosts="${hosts},pipeline"

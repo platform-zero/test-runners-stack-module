@@ -67,6 +67,12 @@ async function keycloakGlobalSetup() {
   const username = KeycloakClient.generateUsername('playwright');
   const email = `${username}@${domain}`;
   let testUser = KeycloakClient.buildManagedUser(username, email);
+  if (/^visual(?:-|$)/i.test((process.env.PLAYWRIGHT_RUN_LABEL || '').trim())) {
+    testUser = {
+      ...testUser,
+      groups: [...new Set([...testUser.groups, 'admins'])],
+    };
+  }
 
   console.log('Test User Details:');
   console.log(`   Username: ${username}`);

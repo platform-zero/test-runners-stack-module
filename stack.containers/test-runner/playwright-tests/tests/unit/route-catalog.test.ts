@@ -3,6 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   browserRouteCatalog,
+  browserWuiHosts,
+  browserWuiRoutes,
   findRoute,
   readCaddyHostsInventory,
   routeUrl,
@@ -48,6 +50,25 @@ describe('route-catalog', () => {
 
     expect(invalidSmokeHosts).toEqual([]);
     expect(invalidVisualHosts).toEqual([]);
+  });
+
+  it('requires visual evidence for the independent WUI service inventory', () => {
+    expect(browserWuiHosts).toEqual([
+      'apex', 'onboarding', 'alerts', 'bookstack', 'sogo', 'jellyfin', 'donetick', 'huly',
+      'erpnext', 'element', 'forgejo', 'grafana', 'homeassistant', 'portal', 'keycloak',
+      'jupyterhub', 'kopia', 'mastodon', 'ntfy', 'pipeline', 'planka', 'prometheus',
+      'websearch', 'seafile', 'vaultwarden', 'qbittorrent',
+    ]);
+
+    for (const route of browserWuiRoutes) {
+      expect(route.ownership.route).toBe(true);
+      expect(route.ownership.visual).toBe(true);
+      expect(route.visual).toBeDefined();
+      expect(route.visual?.fileStem).toMatch(/^[a-z0-9-]+$/);
+      expect(route.visual?.matcher).toBeInstanceOf(RegExp);
+    }
+
+    expect(new Set(browserWuiRoutes.map((route) => route.visual?.fileStem)).size).toBe(browserWuiRoutes.length);
   });
 
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
@@ -159,7 +180,7 @@ describe('route-catalog', () => {
     expect(qbittorrent.visual?.disallowMatcher?.test('qBittorrent WebUI Username Password Login')).toBe(true);
     expect(qbittorrent.visual?.matcher.test('northstar-portal-backup.iso')).toBe(true);
     expect(qbittorrent.visual?.prepare).toBeDefined();
-    expect(qbittorrent.visual?.maxDarkPixelRatio).toBe(0.2);
+    expect(qbittorrent.visual?.maxDarkPixelRatio).toBe(0.05);
   });
 
   it('reads host inventory from an explicit file and strips comments', () => {

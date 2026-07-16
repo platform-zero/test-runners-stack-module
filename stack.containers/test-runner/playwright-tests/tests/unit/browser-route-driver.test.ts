@@ -487,6 +487,46 @@ describe('browser-route-driver', () => {
       expect(KeycloakLoginPage).not.toHaveBeenCalled();
     });
 
+    it('accepts an OIDC start path that resumes an existing authenticated session', async () => {
+      const page = createPage({
+        onGoto: (url, currentPage) => {
+          if (url.endsWith('/sso/OID/start/keycloak')) {
+            currentPage.__setUrl('https://jellyfin.datamancy.net/web/index.html#/home');
+            currentPage.__setBody('Jellyfin Home Favorites Libraries');
+            return;
+          }
+          currentPage.__setUrl('https://jellyfin.datamancy.net/');
+          currentPage.__setBody('Jellyfin Sign In');
+        },
+      });
+      const route = createRoute({
+        host: 'jellyfin',
+        label: 'Jellyfin',
+        kind: 'oidc_login',
+        anonymous: {
+          kind: 'service_login',
+          matcher: /Jellyfin|Sign In/,
+          loginLabel: 'Keycloak',
+          allowAuthRedirect: true,
+        },
+        smoke: {
+          matcher: /Jellyfin Home|Favorites|Libraries/,
+          loginLabel: 'Keycloak',
+          oidcStartPath: '/sso/OID/start/keycloak',
+          oidcStartSuccessUrlMatcher: /#\/home\b/i,
+          disallowMatcher: /Sign In/,
+        },
+      });
+
+      await expect(assertSmokeContract(page, route, user)).resolves.toBeUndefined();
+
+      expect(page.goto).toHaveBeenCalledWith('https://jellyfin.datamancy.net/sso/OID/start/keycloak', {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
+      expect(mockClickOIDCButton).not.toHaveBeenCalled();
+    });
+
     it('completes service-led OIDC login flows with a consent screen', async () => {
       let settingsVisits = 0;
       const page = createPage({
