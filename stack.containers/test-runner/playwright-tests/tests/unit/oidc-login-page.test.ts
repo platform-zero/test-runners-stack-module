@@ -133,7 +133,6 @@ describe('OIDCLoginPage.clickOIDCButton', () => {
     await expect(oidcPage.clickOIDCButton('Keycloak')).resolves.toBeUndefined();
     expect(logPageTelemetry).toHaveBeenCalledWith(page, 'Service Login Page (pre-OIDC)');
     expect(oidcLocator.click).toHaveBeenCalledWith({
-      force: true,
       noWaitAfter: true,
     });
     expect(page.waitForURL).toHaveBeenCalledWith(expect.any(Function), { timeout: 15000 });
@@ -170,7 +169,6 @@ describe('OIDCLoginPage.clickOIDCButton', () => {
     expect(signInLocator.click).toHaveBeenCalledWith({ force: true });
     expect(page.waitForLoadState).toHaveBeenCalledWith('domcontentloaded', { timeout: 10000 });
     expect(oidcLocator.click).toHaveBeenCalledWith({
-      force: true,
       noWaitAfter: true,
     });
     expect(console.log).toHaveBeenCalledWith('   ✓ Clicked OIDC button: Keycloak after sign-in hop');
@@ -194,7 +192,6 @@ describe('OIDCLoginPage.clickOIDCButton', () => {
     await expect(oidcPage.clickOIDCButton('Keycloak')).resolves.toBeUndefined();
     expect(signInLocator.click).toHaveBeenCalledWith({ force: true });
     expect(oidcLocator.click).toHaveBeenCalledWith({
-      force: true,
       noWaitAfter: true,
     });
   });
@@ -214,7 +211,7 @@ describe('OIDCLoginPage.clickOIDCButton', () => {
     const oidcPage = new OIDCLoginPage(page as never);
 
     await expect(oidcPage.clickOIDCButton('Keycloak')).resolves.toBeUndefined();
-    expect(hrefLocator.click).toHaveBeenCalledWith({ force: true, noWaitAfter: true });
+    expect(hrefLocator.click).toHaveBeenCalledWith({ noWaitAfter: true });
     expect(console.log).toHaveBeenCalledWith('   ✓ Clicked OIDC button: Keycloak');
   });
 
@@ -237,7 +234,7 @@ describe('OIDCLoginPage.clickOIDCButton', () => {
     const oidcPage = new OIDCLoginPage(page as never);
 
     await expect(oidcPage.clickOIDCButton('Keycloak')).resolves.toBeUndefined();
-    expect(hrefLocator.click).toHaveBeenCalledWith({ force: true, noWaitAfter: true });
+    expect(hrefLocator.click).toHaveBeenCalledWith({ noWaitAfter: true });
   });
 
   it('throws when no OIDC entry point can be found', async () => {

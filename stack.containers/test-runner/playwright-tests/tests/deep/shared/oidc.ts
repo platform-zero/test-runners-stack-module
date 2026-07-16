@@ -733,7 +733,13 @@ export async function testOIDCService(
   }
   for (const buttonName of oidcButtonNames) {
     try {
-      await oidcPage.clickOIDCButton(buttonName);
+      await oidcPage.clickOIDCButton(buttonName, {
+        // A valid existing provider session can complete the round trip and
+        // return to the application before Playwright observes the auth host.
+        // Service-specific probes and the final UI/disallow contracts still
+        // have to prove authentication before this helper succeeds.
+        requireAuthRedirect: !options.authenticatedProbe,
+      });
       buttonFound = true;
       break;
     } catch (error) {
@@ -788,7 +794,9 @@ export async function testOIDCService(
       if (!buttonFound) {
         for (const buttonName of oidcButtonNames) {
           try {
-            await oidcPage.clickOIDCButton(buttonName);
+            await oidcPage.clickOIDCButton(buttonName, {
+              requireAuthRedirect: !options.authenticatedProbe,
+            });
             buttonFound = true;
             break;
           } catch (error) {
@@ -958,7 +966,7 @@ export async function testOIDCService(
   if (!hasContent && page.isClosed()) {
     throw new Error(`Browser page closed before ${serviceName} UI validation completed.`);
   }
-  expect(hasContent).toBeTruthy();
+  expect(hasContent).toBe(true);
 
   // Verify service-specific UI pattern to confirm correct page
   // Retry pattern matching to handle slow-loading SPAs

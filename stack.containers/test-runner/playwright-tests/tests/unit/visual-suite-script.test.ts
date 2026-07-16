@@ -117,7 +117,8 @@ describe('visual suite script', () => {
     if (!managedRunnerContainerfile) {
       throw new Error(`missing managed runner Containerfile fixture; tried ${managedRunnerContainerfilePaths.join(', ')}`);
     }
-    fs.readFileSync(managedRunnerContainerfile, 'utf8');
-
+    const containerfile = fs.readFileSync(managedRunnerContainerfile, 'utf8');
+    expect(containerfile).toContain('COPY --chown=pwuser:pwuser stack.containers/test-runner/playwright-tests /app/playwright-tests');
+    expect(containerfile).not.toMatch(/COPY[^\n]*modules\//);
   });
 });

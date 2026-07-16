@@ -66,6 +66,35 @@ component_selected() {
   return 1
 }
 
+component_selection_known() {
+  local candidate
+  for candidate in \
+    "${TEST_RUNNER_COMPONENTS_LOCK_FILE:-}" \
+    "${WEBSERVICES_COMPONENTS_LOCK_FILE:-}" \
+    "/component-lock/components.lock.json" \
+    "/runtime/components.lock.json" \
+    "/app/build/site/components.lock.json" \
+    "/app/site/components.lock.json"; do
+    [ -n "$candidate" ] || continue
+    [ -f "$candidate" ] && return 0
+  done
+  return 1
+}
+
+component_selected_or_unknown() {
+  ! component_selection_known || component_selected "$1"
+}
+
+all_components_selected_or_unknown() {
+  local component
+  if ! component_selection_known; then
+    return 0
+  fi
+  for component in "$@"; do
+    component_selected "$component" || return 1
+  done
+}
+
 run_specs() {
   local route_hosts="$1"
   shift
@@ -79,6 +108,7 @@ run_specs() {
 run_group() {
   local group="$1"
   cd "$PLAYWRIGHT_DIR"
+  export PLAYWRIGHT_RUN_LABEL="${group//:/-}"
 
   case "$group" in
     route)
@@ -122,6 +152,14 @@ run_group() {
     deep:grafana)
       require_services caddy keycloak keycloak-auth-gateway grafana loki
       run_specs "grafana" tests/deep/forward-auth/grafana.spec.ts tests/deep/oidc/grafana.spec.ts
+      ;;
+    deep:grafana-forward)
+      require_services caddy keycloak keycloak-auth-gateway grafana loki
+      run_specs "grafana" tests/deep/forward-auth/grafana.spec.ts
+      ;;
+    deep:grafana-oidc)
+      require_services caddy keycloak grafana
+      run_specs "grafana" tests/deep/oidc/grafana.spec.ts
       ;;
     deep:homeassistant)
       require_services caddy keycloak keycloak-auth-gateway homeassistant
@@ -187,9 +225,29 @@ run_group() {
       require_services caddy keycloak keycloak-auth-gateway vaultwarden
       run_specs "vaultwarden,api.vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts tests/deep/oidc/vaultwarden.spec.ts
       ;;
+    deep:vaultwarden-forward)
+      require_services caddy keycloak keycloak-auth-gateway vaultwarden
+      run_specs "vaultwarden,api.vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts
+      ;;
+    deep:vaultwarden-oidc)
+      require_services caddy keycloak vaultwarden
+      run_specs "vaultwarden,api.vaultwarden" tests/deep/oidc/vaultwarden.spec.ts
+      ;;
     deep:session)
       require_services caddy keycloak keycloak-auth-gateway jupyterhub prometheus portal grafana bookstack
       run_specs "jupyterhub,prometheus,portal,grafana,bookstack" tests/deep/forward-auth/session.spec.ts tests/deep/oidc/session.spec.ts
+      ;;
+    deep:forward-session)
+      require_services caddy keycloak keycloak-auth-gateway jupyterhub prometheus portal grafana bookstack
+      run_specs "jupyterhub,prometheus,portal,grafana,bookstack" tests/deep/forward-auth/session.spec.ts
+      ;;
+    deep:oidc-session)
+      require_services caddy keycloak grafana bookstack
+      run_specs "grafana,bookstack" tests/deep/oidc/session.spec.ts
+      ;;
+    deep:non-browser)
+      require_services caddy keycloak keycloak-auth-gateway
+      PW_SKIP_GLOBAL_SETUP=1 run_specs "" tests/deep/forward-auth/non-browser-api-endpoints.spec.ts
       ;;
     visual:coverage)
       require_services caddy keycloak keycloak-auth-gateway portal
@@ -197,15 +255,11 @@ run_group() {
       ;;
     visual:portal)
       require_services caddy keycloak keycloak-auth-gateway portal
-      run_specs "apex,portal" tests/visual/smoke-visual.spec.ts tests/visual/portal-role-dashboards.spec.ts
+      run_specs "apex,keycloak,portal" tests/visual/smoke-visual.spec.ts tests/visual/portal-role-dashboards.spec.ts
       ;;
     visual:apps)
-      local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack forgejo grafana onboarding portal)
-      hosts="alerts,bookstack,forgejo,grafana,onboarding,portal"
-      if component_selected search; then
-        services+=(opensearch)
-        hosts="${hosts},search"
-      fi
+      local services=(caddy keycloak keycloak-auth-gateway alertmanager bookstack element forgejo grafana huly onboarding portal searxng)
+      hosts="alerts,bookstack,element,forgejo,grafana,huly,onboarding,portal,websearch"
       if component_selected pipeline; then
         services+=(airflow-webserver airflow-scheduler ingestion-runner)
         hosts="${hosts},pipeline"
@@ -249,6 +303,54 @@ run_group_sequence() {
   [ "$failed" -eq 0 ]
 }
 
+run_component_group() {
+  local component="$1" group="$2"
+  if component_selected_or_unknown "$component"; then
+    run_group_sequence "$group"
+  else
+    printf '[playwright-suite] skipping %s because component %s is not selected\n' "$group" "$component" >&2
+  fi
+}
+
+run_deep_forward_auth() {
+  local failed=0
+  run_group_sequence deep:non-browser || failed=$((failed + 1))
+  run_component_group observability deep:alertmanager || failed=$((failed + 1))
+  run_component_group observability deep:grafana-forward || failed=$((failed + 1))
+  run_component_group homeassistant deep:homeassistant || failed=$((failed + 1))
+  run_component_group jupyterhub deep:jupyterhub || failed=$((failed + 1))
+  run_component_group kopia deep:kopia || failed=$((failed + 1))
+  run_component_group ntfy deep:ntfy || failed=$((failed + 1))
+  run_group_sequence deep:onboarding || failed=$((failed + 1))
+  run_component_group portal deep:portal || failed=$((failed + 1))
+  run_component_group observability deep:prometheus || failed=$((failed + 1))
+  run_component_group seafile deep:seafile || failed=$((failed + 1))
+  run_component_group search deep:search || failed=$((failed + 1))
+  run_component_group vaultwarden deep:vaultwarden-forward || failed=$((failed + 1))
+  if all_components_selected_or_unknown jupyterhub observability portal bookstack; then
+    run_group_sequence deep:forward-session || failed=$((failed + 1))
+  fi
+  [ "$failed" -eq 0 ]
+}
+
+run_deep_oidc() {
+  local failed=0
+  run_component_group bookstack deep:bookstack || failed=$((failed + 1))
+  run_component_group matrix deep:element || failed=$((failed + 1))
+  run_component_group forgejo deep:forgejo || failed=$((failed + 1))
+  run_component_group observability deep:grafana-oidc || failed=$((failed + 1))
+  run_component_group jellyfin deep:jellyfin || failed=$((failed + 1))
+  run_group_sequence deep:keycloak || failed=$((failed + 1))
+  run_component_group mastodon deep:mastodon || failed=$((failed + 1))
+  run_component_group matrix deep:matrix || failed=$((failed + 1))
+  run_component_group planka deep:planka || failed=$((failed + 1))
+  run_component_group vaultwarden deep:vaultwarden-oidc || failed=$((failed + 1))
+  if all_components_selected_or_unknown observability bookstack; then
+    run_group_sequence deep:oidc-session || failed=$((failed + 1))
+  fi
+  [ "$failed" -eq 0 ]
+}
+
 run_target() {
   local target="${1:-all}"
   case "$target" in
@@ -270,12 +372,10 @@ run_target() {
       run_group_sequence mobile:smoke mobile:auth
       ;;
     deep:forward-auth)
-      require_services caddy keycloak keycloak-auth-gateway prometheus portal
-      run_specs "prometheus,portal" tests/deep/forward-auth/session.spec.ts
+      run_deep_forward_auth
       ;;
     deep:oidc)
-      require_services caddy keycloak grafana bookstack
-      run_specs "grafana,bookstack" tests/deep/oidc/session.spec.ts
+      run_deep_oidc
       ;;
     visual)
       groups="visual:coverage visual:portal visual:apps visual:media visual:utilities"

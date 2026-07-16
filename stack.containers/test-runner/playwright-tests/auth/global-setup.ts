@@ -1,4 +1,4 @@
-import { chromium, FullConfig } from '@playwright/test';
+import { chromium, FullConfig, type Page, type Response } from '@playwright/test';
 import { authArtifactPath, writeJsonAuthArtifact } from '../utils/auth-artifacts';
 import { removeJupyterContainersForUsers } from '../utils/jupyterhub-cleanup';
 import { KeycloakClient } from '../utils/keycloak-client';
@@ -30,6 +30,24 @@ function requireEnv(name: string): string {
   );
 }
 
+async function gotoIdentityProvider(page: Page, providerUrl: string): Promise<Response | null> {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await page.goto(providerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const transient = /ERR_NETWORK_CHANGED|ERR_SSL_PROTOCOL_ERROR|ERR_CONNECTION_(?:RESET|CLOSED|REFUSED)/i.test(message);
+      if (!transient || attempt === maxAttempts) {
+        throw error;
+      }
+      console.log(`   Transient identity-provider navigation failure; retrying (${attempt}/${maxAttempts})...`);
+      await page.waitForTimeout(500 * attempt);
+    }
+  }
+  throw new Error('Identity-provider navigation retry loop exhausted unexpectedly.');
+}
+
 async function globalSetup(_config: FullConfig) {
   if (process.env.PW_SKIP_GLOBAL_SETUP === '1') {
     console.log('Skipping Playwright global setup because PW_SKIP_GLOBAL_SETUP=1');
@@ -49,6 +67,12 @@ async function keycloakGlobalSetup() {
   const username = KeycloakClient.generateUsername('playwright');
   const email = `${username}@${domain}`;
   let testUser = KeycloakClient.buildManagedUser(username, email);
+  if (/^visual(?:-|$)/i.test((process.env.PLAYWRIGHT_RUN_LABEL || '').trim())) {
+    testUser = {
+      ...testUser,
+      groups: [...new Set([...testUser.groups, 'admins'])],
+    };
+  }
 
   console.log('Test User Details:');
   console.log(`   Username: ${username}`);
@@ -113,7 +137,7 @@ async function keycloakGlobalSetup() {
   try {
     const providerUrl = identityProvider.authUrl(protectedUrl);
     console.log(`   Connecting to ${identityProvider.label}: ${redactUrlForLogs(providerUrl)}`);
-    const response = await page.goto(providerUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const response = await gotoIdentityProvider(page, providerUrl);
     console.log(`   Response status: ${response?.status()}`);
     console.log(`   Current URL: ${redactUrlForLogs(page.url())}`);
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {
