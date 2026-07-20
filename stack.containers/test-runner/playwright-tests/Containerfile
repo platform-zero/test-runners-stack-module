@@ -17,4 +17,5 @@ COPY . .
 RUN npm run build
 
 # Default command runs all tests
+USER pwuser
 CMD ["npm", "test"]

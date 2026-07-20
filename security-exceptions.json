@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "exceptions": [
+    {
+      "rule": "container-root-default",
+      "path": "stack.containers/test-runner/Containerfile",
+      "reason": "The test entrypoint installs ephemeral trust material and prepares bind-mounted result directories before tests.",
+      "mitigations": ["The entrypoint drops to pwuser before executing every test suite.", "The container is short-lived and has no listening service."]
+    },
+    {
+      "rule": "container-socket-mount",
+      "path": "stack.runtime.yaml",
+      "reason": "End-to-end stack tests must inspect containers through the dedicated rootless Podman API.",
+      "mitigations": ["The socket belongs to the isolated test-runners account.", "The test container is removed after each run."]
+    }
+  ]
+}
