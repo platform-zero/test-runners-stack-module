@@ -649,7 +649,10 @@ podman_run_extra_host_args() {
         "git.$domain" \
         "homeassistant.$domain" \
         "api.homeassistant.$domain" \
-        "jupyter.$domain" \
+        "jupyterhub.$domain" \
+        "mail.$domain" \
+        "huly.$domain" \
+        "portal.$domain" \
         "mastodon.$domain" \
         "api.mastodon.$domain" \
         "ntfy.$domain" \
@@ -745,6 +748,19 @@ podman_run_env_args() {
     printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
     printf '%s\n' "-e"
     printf '%s\n' "CADDY_URL=${CADDY_URL:-http://host.containers.internal:80}"
+    local service_name env_name host_port
+    while IFS=' ' read -r service_name env_name; do
+        host_port="$(jq -r --arg service "$service_name" '.endpoints[]? | select(.service == $service) | .hostPort' "$rootless_release/podman-loopback-endpoints.json" 2>/dev/null | head -n 1)"
+        if [ -n "$host_port" ] && [ "$host_port" != "null" ]; then
+            printf '%s\n' "-e"
+            printf '%s\n' "$env_name=http://host.containers.internal:$host_port"
+        fi
+    done <<'EOF'
+jupyterhub JUPYTERHUB_URL
+kopia KOPIA_URL
+EOF
+    printf '%s\n' "-e"
+    printf '%s\n' "MAILSERVER_URL=${MAILSERVER_URL:-host.containers.internal:25}"
     printf '%s\n' "-e"
     printf '%s\n' "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}"
     podman_run_service_env_args "$env_file"
