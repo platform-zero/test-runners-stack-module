@@ -40,6 +40,14 @@ describe('suite orchestration', () => {
     expect(script).toContain('run_runner "${step_args[@]}"');
   });
 
+  it('accepts concise Kotlin suite names documented by the runner help', () => {
+    const script = fs.readFileSync(runnerScript, 'utf8');
+
+    expect(script).toContain('normalize_kotlin_suite()');
+    expect(script).toContain("core|auth|apps|contract|live-ingestion|recovery|full) printf 'stack-%s\\n'");
+    expect(script).toContain('run_runner suite "$(normalize_kotlin_suite "${1:-$DEFAULT_KT_SUITE}")"');
+  });
+
   it('uses the workload domain socket and a test-user-owned Podman runtime', () => {
     const script = fs.readFileSync(runnerScript, 'utf8');
     const entrypointPath = resolveRequiredFile('container-entrypoint.sh', [

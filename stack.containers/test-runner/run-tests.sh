@@ -115,7 +115,7 @@ print_usage() {
     echo "Usage: $0 [COMMAND] [ARGS]"
     echo ""
     echo -e "${GREEN}Kotlin:${NC}"
-    echo "  kt [suite]        Run the repo-owned Kotlin integration suite (default: $DEFAULT_KT_SUITE)"
+    echo "  kt [suite]        Run the repo-owned Kotlin integration suite (for example: full or stack-full; default: $DEFAULT_KT_SUITE)"
     echo "  run [suite]       Alias for kt"
     echo "  kt-list           Print the available Kotlin suites"
     echo "  kt-tests [suite]  Print granular Kotlin managed test ids"
@@ -168,6 +168,14 @@ print_usage() {
     echo -e "${GREEN}Debug:${NC}"
     echo "  shell [cmd...]    Open a shell in the test-runner container"
     echo ""
+}
+
+normalize_kotlin_suite() {
+    case "$1" in
+        core|auth|apps|contract|live-ingestion|recovery|full) printf 'stack-%s\n' "$1" ;;
+        all) printf 'kotlin-all\n' ;;
+        *) printf '%s\n' "$1" ;;
+    esac
 }
 
 container_cli() {
@@ -1261,16 +1269,16 @@ fi
 
 case "$COMMAND" in
     kt|run)
-        run_runner suite "${1:-$DEFAULT_KT_SUITE}"
+        run_runner suite "$(normalize_kotlin_suite "${1:-$DEFAULT_KT_SUITE}")"
         ;;
     kt-list)
         printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
         ;;
     kt-tests)
-        run_kotlin_metadata list "${1:-kotlin-all}"
+        run_kotlin_metadata list "$(normalize_kotlin_suite "${1:-kotlin-all}")"
         ;;
     kt-plan)
-        run_kotlin_metadata plan "${1:-kotlin-all}"
+        run_kotlin_metadata plan "$(normalize_kotlin_suite "${1:-kotlin-all}")"
         ;;
     kt-one)
         if [ -z "${1:-}" ]; then
@@ -1278,7 +1286,7 @@ case "$COMMAND" in
             exit 1
         fi
         test_id="$1"
-        suite_name="${2:-stack-contract}"
+        suite_name="$(normalize_kotlin_suite "${2:-stack-contract}")"
         run_runner suite-test "$test_id" "$suite_name"
         ;;
     kt-core)
