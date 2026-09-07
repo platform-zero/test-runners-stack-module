@@ -623,6 +623,17 @@ emit_env_arg() {
     printf '%s\n' "$key=$value"
 }
 
+loopback_endpoint_url() {
+    local service="$1"
+    local container_port="$2"
+    local release port
+    release="$(rootless_release_dir)"
+    port="$(jq -er --arg service "$service" --arg port "$container_port" \
+        '.endpoints[] | select(.service == $service and (.containerPort | tostring) == $port) | .hostPort' \
+        "$release/podman-loopback-endpoints.json")"
+    printf 'http://host.containers.internal:%s\n' "$port"
+}
+
 podman_run_extra_host_args() {
     local env_file="$1"
     local domain
@@ -684,7 +695,7 @@ podman_run_service_env_args() {
     emit_env_arg DOMAIN "$domain"
     [ -n "$domain" ] && emit_env_arg BASE_URL "https://$domain"
     [ -n "$domain" ] && emit_env_arg KEYCLOAK_URL "https://keycloak.$domain"
-    emit_env_arg KEYCLOAK_INTERNAL_URL "http://keycloak:8080"
+    emit_env_arg KEYCLOAK_INTERNAL_URL "$(loopback_endpoint_url keycloak 8080)"
     emit_env_arg KEYCLOAK_REALM "webservices"
     emit_env_arg KEYCLOAK_ADMIN_USER "admin"
     emit_env_arg KEYCLOAK_ADMIN_PASSWORD "$(env_file_value "$env_file" KEYCLOAK_ADMIN_PASSWORD)"
@@ -694,7 +705,7 @@ podman_run_service_env_args() {
     emit_env_arg MODEL_CONTEXT_OIDC_REDIRECT_URI "http://test-runner-managed/callback"
     emit_env_arg MODEL_CONTEXT_OIDC_SCOPE "openid profile email groups"
     emit_env_arg MODEL_CONTEXT_PROXY_AUTH_SECRET "$(env_file_value "$env_file" MODEL_CONTEXT_PROXY_AUTH_SECRET)"
-    emit_env_arg OPENSEARCH_URL "http://opensearch:9200"
+    emit_env_arg OPENSEARCH_URL "$(loopback_endpoint_url opensearch 9200)"
     emit_env_arg OPENSEARCH_USERNAME "admin"
     emit_env_arg OPENSEARCH_ADMIN_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
     emit_env_arg OPENSEARCH_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
@@ -702,13 +713,13 @@ podman_run_service_env_args() {
     emit_env_arg STACK_ADMIN_USER "$(env_file_value "$env_file" STACK_ADMIN_USER)"
     emit_env_arg STACK_ADMIN_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg STACK_ADMIN_EMAIL "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
-    emit_env_arg POSTGRES_HOST "postgres-ssd"
-    emit_env_arg POSTGRES_PORT "5432"
+    emit_env_arg POSTGRES_HOST "host.containers.internal"
+    emit_env_arg POSTGRES_PORT "$(loopback_endpoint_url postgres-ssd 5432 | sed 's/.*://')"
     emit_env_arg POSTGRES_DB "webservices"
     emit_env_arg POSTGRES_USER "test_runner_user"
     emit_env_arg POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_TEST_RUNNER_PASSWORD)"
-    emit_env_arg MATRIX_POSTGRES_HOST "postgres"
-    emit_env_arg MATRIX_POSTGRES_PORT "5432"
+    emit_env_arg MATRIX_POSTGRES_HOST "host.containers.internal"
+    emit_env_arg MATRIX_POSTGRES_PORT "$(loopback_endpoint_url postgres 5432 | sed 's/.*://')"
     emit_env_arg MATRIX_POSTGRES_DB "synapse"
     emit_env_arg MATRIX_POSTGRES_USER "synapse"
     emit_env_arg MATRIX_POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_SYNAPSE_PASSWORD)"
@@ -724,12 +735,14 @@ podman_run_service_env_args() {
     emit_env_arg MASTODON_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg MASTODON_API_TOKEN "$(env_file_value "$env_file" MASTODON_API_TOKEN)"
     [ -n "$domain" ] && emit_env_arg MASTODON_HOST_HEADER "mastodon.$domain"
-    emit_env_arg MARIADB_HOST "mariadb"
-    emit_env_arg MARIADB_PORT "3306"
+    emit_env_arg MARIADB_HOST "host.containers.internal"
+    emit_env_arg MARIADB_PORT "$(loopback_endpoint_url mariadb 3306 | sed 's/.*://')"
     emit_env_arg MARIADB_USER "bookstack"
     emit_env_arg MARIADB_PASSWORD "$(env_file_value "$env_file" MARIADB_BOOKSTACK_PASSWORD)"
     emit_env_arg VALKEY_ADMIN_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
     emit_env_arg VALKEY_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
+    emit_env_arg VALKEY_URL "$(loopback_endpoint_url valkey 6379 | sed 's#^http://##')"
+    emit_env_arg MEMCACHED_URL "$(loopback_endpoint_url memcached 11211 | sed 's#^http://##')"
     emit_env_arg QDRANT_API_KEY "$(env_file_value "$env_file" QDRANT_ADMIN_API_KEY)"
     emit_env_arg NTFY_USERNAME "$(env_file_value "$env_file" NTFY_USERNAME)"
     emit_env_arg NTFY_PASSWORD "$(env_file_value "$env_file" NTFY_PASSWORD)"
@@ -737,6 +750,23 @@ podman_run_service_env_args() {
     emit_env_arg BOOKSTACK_API_TOKEN_SECRET "$(env_file_value "$env_file" BOOKSTACK_API_TOKEN_SECRET)"
     emit_env_arg VAULTWARDEN_ORG_ID "$(env_file_value "$env_file" VAULTWARDEN_ORG_ID)"
     emit_env_arg VAULTWARDEN_ORG_IDENTIFIER "$(env_file_value "$env_file" VAULTWARDEN_ORG_IDENTIFIER)"
+    emit_env_arg BOOKSTACK_URL "$(loopback_endpoint_url bookstack 80)"
+    emit_env_arg ELEMENT_URL "$(loopback_endpoint_url element 80)"
+    emit_env_arg FORGEJO_URL "$(loopback_endpoint_url forgejo 3000)"
+    emit_env_arg GRAFANA_URL "$(loopback_endpoint_url grafana 3000)"
+    emit_env_arg HOMEASSISTANT_URL "$(loopback_endpoint_url homeassistant 8123)"
+    emit_env_arg MASTODON_URL "$(loopback_endpoint_url mastodon-web 3000)"
+    [ -n "$domain" ] && emit_env_arg MASTODON_STREAMING_URL "https://mastodon.$domain"
+    emit_env_arg NTFY_URL "$(loopback_endpoint_url ntfy 80)"
+    emit_env_arg ONLYOFFICE_URL "$(loopback_endpoint_url onlyoffice 80)"
+    emit_env_arg PLANKA_URL "$(loopback_endpoint_url planka 1337)"
+    emit_env_arg PORTAL_URL "$(loopback_endpoint_url portal 3000)"
+    emit_env_arg HOMEPAGE_URL "$(loopback_endpoint_url portal 3000)"
+    emit_env_arg PROMETHEUS_URL "$(loopback_endpoint_url prometheus 9090)"
+    emit_env_arg QBITTORRENT_URL "$(loopback_endpoint_url qbittorrent 8080)"
+    emit_env_arg SEAFILE_URL "$(loopback_endpoint_url seafile 80)"
+    emit_env_arg SYNAPSE_URL "$(loopback_endpoint_url synapse 8008)"
+    emit_env_arg VAULTWARDEN_URL "$(loopback_endpoint_url vaultwarden 80)"
 }
 
 podman_run_env_args() {

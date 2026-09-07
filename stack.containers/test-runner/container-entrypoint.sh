@@ -32,7 +32,7 @@ copy_tree() {
 
     rm -rf "$target_dir"
     mkdir -p "$(dirname "$target_dir")"
-    cp -a "$source_dir" "$target_dir"
+    cp -R "$source_dir" "$target_dir"
 }
 
 bootstrap_caddy_ca() {
