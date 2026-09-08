@@ -143,7 +143,11 @@ run_group() {
       ;;
     deep:element)
       require_services caddy keycloak element synapse matrix-authentication-service livekit matrix-rtc-auth
-      run_specs "element" tests/deep/oidc/element.spec.ts tests/deep/oidc/element-call-livekit.spec.ts
+      if [ "${TEST_RUNNER_NETWORK_MODE:-isolated}" = "host" ]; then
+        run_specs "element" tests/deep/oidc/element.spec.ts tests/deep/oidc/element-call-livekit.spec.ts
+      else
+        run_specs "element" tests/deep/oidc/element.spec.ts
+      fi
       ;;
     deep:forgejo)
       require_services caddy keycloak forgejo

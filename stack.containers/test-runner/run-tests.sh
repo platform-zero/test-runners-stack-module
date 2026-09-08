@@ -831,6 +831,8 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line"
     printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_NETWORK_MODE=$TEST_RUNNER_NETWORK_MODE"
+    printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file"
     printf '%s\n' "-e"
     printf '%s\n' "XDG_RUNTIME_DIR=/host-user-runtime"
@@ -1012,12 +1014,13 @@ run_runner() {
 
 run_all_tests() {
     local failed=0
-    local step_name step_command command_status
+    local step_name step_command command_status previous_network_mode
     local summary_file results_root
     local -a step_commands=(
         "kt-full|suite stack-full"
         "ts-unit|ts-unit"
         "ts-e2e-all|ts-e2e-all"
+        "ts-e2e-rtc|ts-e2e-name Element Call MatrixRTC"
     )
 
     results_root="$(resolve_test_results_host_dir)"
@@ -1044,6 +1047,15 @@ run_all_tests() {
             run_source_unit_tests
             command_status=$?
             set -e
+        elif [ "$step_name" = "ts-e2e-rtc" ]; then
+            previous_network_mode="$TEST_RUNNER_NETWORK_MODE"
+            TEST_RUNNER_NETWORK_MODE=host
+            if run_runner_no_build "${step_args[@]}"; then
+                command_status=0
+            else
+                command_status=$?
+            fi
+            TEST_RUNNER_NETWORK_MODE="$previous_network_mode"
         elif run_runner_no_build "${step_args[@]}"; then
             command_status=0
         else
@@ -1141,7 +1153,7 @@ EOF_PLAN
                 echo "  $index. source-unit"
                 index=$((index + 1))
             fi
-            for item in kt-full ts-unit ts-e2e-all; do
+            for item in kt-full ts-unit ts-e2e-all ts-e2e-rtc; do
                 echo "  $index. $item"
                 index=$((index + 1))
             done
