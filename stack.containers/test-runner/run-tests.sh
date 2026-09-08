@@ -809,7 +809,11 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "CONTAINER_HOST=$(managed_container_host)"
     printf '%s\n' "-e"
-    printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-127.0.0.1}"
+    else
+        printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
+    fi
     printf '%s\n' "-e"
     printf '%s\n' "CADDY_URL=${CADDY_URL:-http://host.containers.internal:80}"
     if [ -n "$(env_file_value "$env_file" DOMAIN)" ]; then
