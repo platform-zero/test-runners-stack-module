@@ -57,6 +57,7 @@ TEST_RUNNER_STATE_ROOT="${TEST_RUNNER_STATE_ROOT:-$WEBSERVICES_ROOTLESS_STATE_RO
 CADDY_CA_HOST_PATH="${CADDY_CA_HOST_PATH:-/mnt/stack/volumes/caddy_ca/caddy-ca.crt}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
+TEST_RUNNER_NETWORK_MODE="${TEST_RUNNER_NETWORK_MODE:-isolated}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -601,6 +602,12 @@ caddy_ca_mount_args() {
 }
 
 podman_run_network_args() {
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        printf '%s\n' "--network"
+        printf '%s\n' "host"
+        return 0
+    fi
+
     local network
     while IFS= read -r network; do
         [ -n "$network" ] || continue
@@ -683,7 +690,11 @@ podman_run_extra_host_args() {
         "qbittorrent.$domain" \
         "www.$domain"; do
         printf '%s\n' "--add-host"
-        printf '%s\n' "$host:host-gateway"
+        if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+            printf '%s\n' "$host:127.0.0.1"
+        else
+            printf '%s\n' "$host:host-gateway"
+        fi
     done
 }
 
@@ -823,7 +834,14 @@ podman_run_passthrough_env_args() {
 
 run_podman_test_container() {
     ensure_podman_release_artifacts
-    require_rootless_networks
+    case "$TEST_RUNNER_NETWORK_MODE" in
+        isolated) require_rootless_networks ;;
+        host) ;;
+        *)
+            echo -e "${RED}Error:${NC} TEST_RUNNER_NETWORK_MODE must be isolated or host" >&2
+            exit 1
+            ;;
+    esac
     local results_root="$1"
     local command_line="$2"
     shift 2
@@ -844,7 +862,11 @@ run_podman_test_container() {
         fi
         printf '%s\n' "--init"
         printf '%s\n' "--add-host"
-        printf '%s\n' "host.containers.internal:host-gateway"
+        if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+            printf '%s\n' "host.containers.internal:127.0.0.1"
+        else
+            printf '%s\n' "host.containers.internal:host-gateway"
+        fi
         podman_run_extra_host_args "$env_file"
         podman_run_network_args
         podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file" "$env_file"
