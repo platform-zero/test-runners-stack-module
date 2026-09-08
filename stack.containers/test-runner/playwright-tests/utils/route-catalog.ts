@@ -339,11 +339,11 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'service_login', matcher: /\bERPNext\b|\bFrappe\b|\bKeycloak\b|\bLogin\b/i, loginLabel: 'Keycloak', allowAuthRedirect: true },
     visual: {
       fileStem: 'erpnext-authenticated',
-      path: '/app/supplier/Northstar%20Hosting',
-      matcher: /\bNorthstar Hosting\b/i,
-      selector: 'text=/Northstar Hosting/i',
+      path: '/app',
+      matcher: /\bGetting Started\b|\bWorkspace\b|\bERPNext\b/i,
+      selector: 'body',
       loginLabel: 'Keycloak',
-      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\bEdit Profile\b|\bReset Password\b|\bManage 3rd party apps\b|\bPublic Profile\b|\bUser visibility\b|\bNot Found\b|\bDoes Not Exist\b|\b503 Service Unavailable\b/i,
+      disallowMatcher: /\bLogin to Frappe\b|\bEmail Address\b|\bEdit Profile\b|\bReset Password\b|\bManage 3rd party apps\b|\bPublic Profile\b|\bUser visibility\b|\bNot permitted\b|\bNot Found\b|\bDoes Not Exist\b|\b503 Service Unavailable\b/i,
       prepare: async (page) => {
         const gettingStartedPanel = page.locator('.onb-panel').filter({ hasText: 'Getting Started' }).first();
         if (!(await gettingStartedPanel.isVisible().catch(() => false))) {

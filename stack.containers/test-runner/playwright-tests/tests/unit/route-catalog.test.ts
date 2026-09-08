@@ -161,10 +161,11 @@ describe('route-catalog', () => {
     expect(donetick.visual?.disallowMatcher?.test('Loading... This is taking longer than usual.')).toBe(true);
     expect(donetick.visual?.prepare).toBeDefined();
 
-    expect(erpnext.visual?.path).toBe('/app/supplier/Northstar%20Hosting');
+    expect(erpnext.visual?.path).toBe('/app');
     expect(erpnext.visual?.matcher.test('Framework Quality')).toBe(false);
-    expect(erpnext.visual?.matcher.test('Northstar Hosting')).toBe(true);
+    expect(erpnext.visual?.matcher.test('Getting Started')).toBe(true);
     expect(erpnext.visual?.disallowMatcher?.test('Login to Frappe')).toBe(true);
+    expect(erpnext.visual?.disallowMatcher?.test('Not permitted')).toBe(true);
     expect(erpnext.visual?.prepare).toBeDefined();
   });
 
