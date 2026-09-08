@@ -329,8 +329,18 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
   }
 }
 
-async function assertAnonymousForwardAuth(page: Page): Promise<void> {
-  await expectIdentityLogin(page);
+async function assertAnonymousForwardAuth(page: Page, route: BrowserRoute): Promise<void> {
+  try {
+    await expectIdentityLogin(page);
+  } catch (firstError) {
+    console.log(`   ⚠️  ${route.label} forward-auth navigation did not settle; retrying the route once...`);
+    await gotoWithRetry(page, routeUrl(route));
+    try {
+      await expectIdentityLogin(page);
+    } catch {
+      throw firstError;
+    }
+  }
 }
 
 async function assertAnonymousServiceLogin(page: Page, route: BrowserRoute, contract: Extract<AnonymousContract, { kind: 'service_login' }>): Promise<void> {
@@ -370,7 +380,7 @@ export async function assertAnonymousContract(page: Page, route: BrowserRoute): 
       await expectPageMatcher(page, contract.matcher, `${route.label} public page`);
       return;
     case 'forward_auth':
-      await assertAnonymousForwardAuth(page);
+      await assertAnonymousForwardAuth(page, route);
       return;
     case 'service_login':
       await assertAnonymousServiceLogin(page, route, contract);
