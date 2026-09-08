@@ -67,6 +67,7 @@ describe('suite orchestration', () => {
     expect(script).toContain('TEST_RUNNER_NETWORK_MODE="${TEST_RUNNER_NETWORK_MODE:-isolated}"');
     expect(script).toContain('TEST_RUNNER_NETWORK_MODE must be isolated or host');
     expect(script).toContain('"host.containers.internal:127.0.0.1"');
+    expect(script).toContain('emit_env_arg LIVEKIT_INTERNAL_API_URL "http://host.containers.internal:7880"');
   });
 
   it('forces container-control subprocesses through the Podman remote client', () => {

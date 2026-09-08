@@ -743,6 +743,7 @@ podman_run_service_env_args() {
     emit_env_arg SYNAPSE_REGISTRATION_SECRET "$(env_file_value "$env_file" SYNAPSE_REGISTRATION_SECRET)"
     emit_env_arg LIVEKIT_API_KEY "$(env_file_value "$env_file" LIVEKIT_API_KEY)"
     emit_env_arg LIVEKIT_API_SECRET "$(env_file_value "$env_file" LIVEKIT_API_SECRET)"
+    emit_env_arg LIVEKIT_INTERNAL_API_URL "http://host.containers.internal:7880"
     emit_env_arg SEAFILE_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
     emit_env_arg SEAFILE_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg FORGEJO_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_USER)"
