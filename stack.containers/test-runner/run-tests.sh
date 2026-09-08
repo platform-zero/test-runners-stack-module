@@ -706,8 +706,13 @@ podman_run_service_env_args() {
     emit_env_arg DOMAIN "$domain"
     [ -n "$domain" ] && emit_env_arg BASE_URL "https://$domain"
     [ -n "$domain" ] && emit_env_arg KEYCLOAK_URL "https://keycloak.$domain"
-    emit_env_arg KEYCLOAK_INTERNAL_URL "$(loopback_endpoint_url keycloak 8080)"
-    emit_env_arg KEYCLOAK_AUTH_GATEWAY_URL "$(loopback_endpoint_url keycloak-auth-gateway 4180)"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        emit_env_arg KEYCLOAK_INTERNAL_URL "https://keycloak.$domain"
+        emit_env_arg KEYCLOAK_AUTH_GATEWAY_URL "https://keycloak-auth.$domain"
+    else
+        emit_env_arg KEYCLOAK_INTERNAL_URL "$(loopback_endpoint_url keycloak 8080)"
+        emit_env_arg KEYCLOAK_AUTH_GATEWAY_URL "$(loopback_endpoint_url keycloak-auth-gateway 4180)"
+    fi
     emit_env_arg KEYCLOAK_REALM "webservices"
     emit_env_arg KEYCLOAK_ADMIN_USER "admin"
     emit_env_arg KEYCLOAK_ADMIN_PASSWORD "$(env_file_value "$env_file" KEYCLOAK_ADMIN_PASSWORD)"
@@ -778,7 +783,11 @@ podman_run_service_env_args() {
     emit_env_arg PROMETHEUS_URL "$(loopback_endpoint_url prometheus 9090)"
     emit_env_arg QBITTORRENT_URL "$(loopback_endpoint_url qbittorrent 8080)"
     emit_env_arg SEAFILE_URL "$(loopback_endpoint_url seafile 80)"
-    emit_env_arg SYNAPSE_URL "$(loopback_endpoint_url synapse 8008)"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        emit_env_arg SYNAPSE_URL "https://matrix.$domain"
+    else
+        emit_env_arg SYNAPSE_URL "$(loopback_endpoint_url synapse 8008)"
+    fi
     emit_env_arg VAULTWARDEN_URL "$(loopback_endpoint_url vaultwarden 80)"
 }
 
