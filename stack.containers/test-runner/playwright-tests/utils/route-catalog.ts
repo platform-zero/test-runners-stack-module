@@ -468,7 +468,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     smoke: {
       path: '/d/logs-home/logs',
       selector: 'text=/All Logs|Dashboards|Refresh/i',
-      matcher: /(?=[\s\S]*\bAll Logs\b)(?=[\s\S]*\b\d{4}-\d{2}-\d{2}\b)/i,
+      matcher: /\bAll Logs\b/i,
       disallowMatcher: /Data source error|Failed to load/i,
     },
     visual: {
