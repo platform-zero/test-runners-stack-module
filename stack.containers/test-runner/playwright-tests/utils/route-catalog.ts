@@ -467,7 +467,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     smoke: {
       path: '/d/logs-home/logs',
-      selector: 'text=/All Logs|Dashboards|Refresh/i',
       matcher: /\bAll Logs\b/i,
       disallowMatcher: /Data source error|Failed to load/i,
     },
