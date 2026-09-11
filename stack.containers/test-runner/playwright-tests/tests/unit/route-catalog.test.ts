@@ -169,14 +169,15 @@ describe('route-catalog', () => {
     expect(erpnext.visual?.prepare).toBeDefined();
   });
 
-  it('rejects empty Grafana logs and qBittorrent native-login false positives', () => {
+  it('requires populated Grafana logs without interpreting log payloads as UI errors', () => {
     const grafana = findRoute('grafana');
     const qbittorrent = findRoute('qbittorrent');
 
     expect(grafana.visual?.matcher.test('All Logs 2026-07-15 18:50:42 INFO')).toBe(true);
     expect(grafana.visual?.matcher.test('All Logs No data')).toBe(false);
-    expect(grafana.visual?.disallowMatcher?.test('No data')).toBe(false);
-    expect(grafana.visual?.disallowMatcher?.test('Data source error')).toBe(true);
+    expect(grafana.smoke?.matcher.test('All Logs 2026-09-11 Failed to load remote avatar')).toBe(true);
+    expect(grafana.smoke?.disallowMatcher).toBeUndefined();
+    expect(grafana.visual?.disallowMatcher).toBeUndefined();
     expect(qbittorrent.visual?.matcher.test('qBittorrent WebUI Username Password Login')).toBe(false);
     expect(qbittorrent.visual?.disallowMatcher?.test('qBittorrent WebUI Username Password Login')).toBe(true);
     expect(qbittorrent.visual?.matcher.test('northstar-portal-backup.iso')).toBe(true);
