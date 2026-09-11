@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { authArtifactPath, loadTestUser } from '../../utils/auth-artifacts';
 import { captureVisualSnapshot } from '../../utils/drivers/browser-route-driver';
 import { defaultIdentityProvider } from '../../utils/identity-provider';
+import { stopJupyterServerForUser } from '../../utils/jupyterhub-cleanup';
 import { visualRoutes } from '../../utils/route-catalog';
 import { serviceUrl } from '../../utils/stack-urls';
 
@@ -57,7 +58,13 @@ test.describe('Visual Smoke', () => {
         if (route.host === 'qbittorrent') {
           await seedQbittorrentVisualFixture(page);
         }
-        await captureVisualSnapshot(page, route, user, screenshotRoot);
+        try {
+          await captureVisualSnapshot(page, route, user, screenshotRoot);
+        } finally {
+          if (route.host === 'jupyterhub') {
+            await stopJupyterServerForUser(page, user.username);
+          }
+        }
       });
     }
   });
