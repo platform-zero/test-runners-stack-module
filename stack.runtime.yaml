@@ -32,7 +32,6 @@ services:
     tmpfs:
     - "/tmp"
     - "/home/android/.android:rw,size=1g"
-    init: true
     resources:
       limits:
         memory: "12G"
@@ -68,7 +67,6 @@ services:
     tmpfs:
     - "/tmp"
     - "/home/android/.android:rw,size=1g"
-    init: true
     resources:
       limits:
         memory: "12G"

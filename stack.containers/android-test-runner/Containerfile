@@ -31,8 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY stack.containers/android-test-runner/entrypoint.sh /usr/local/bin/android-test-entrypoint
 COPY stack.containers/android-test-runner/run-android-tests.sh /usr/local/bin/run-android-tests
-RUN chmod 0755 /usr/local/bin/android-test-entrypoint /usr/local/bin/run-android-tests
+RUN chmod 0755 / /usr/local/bin/android-test-entrypoint /usr/local/bin/run-android-tests
 
-USER android
 WORKDIR /home/android
 ENTRYPOINT ["/usr/local/bin/android-test-entrypoint"]
