@@ -191,7 +191,7 @@ run_group() {
       ;;
     deep:mastodon)
       require_services caddy keycloak mastodon-web mastodon-sidekiq mastodon-streaming
-      run_specs "mastodon,api.mastodon" tests/deep/oidc/mastodon.spec.ts
+      run_specs "mastodon" tests/deep/oidc/mastodon.spec.ts
       ;;
     deep:ntfy)
       require_services caddy keycloak keycloak-auth-gateway ntfy
@@ -219,7 +219,7 @@ run_group() {
       ;;
     deep:seafile)
       require_services caddy keycloak keycloak-auth-gateway seafile onlyoffice
-      run_specs "seafile,api.seafile,onlyoffice" tests/deep/forward-auth/seafile.spec.ts
+      run_specs "seafile,files-native,onlyoffice" tests/deep/forward-auth/seafile.spec.ts
       ;;
     deep:search)
       require_services caddy keycloak keycloak-auth-gateway opensearch
@@ -227,15 +227,15 @@ run_group() {
       ;;
     deep:vaultwarden)
       require_services caddy keycloak keycloak-auth-gateway vaultwarden
-      run_specs "vaultwarden,api.vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts tests/deep/oidc/vaultwarden.spec.ts
+      run_specs "vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts tests/deep/oidc/vaultwarden.spec.ts
       ;;
     deep:vaultwarden-forward)
       require_services caddy keycloak keycloak-auth-gateway vaultwarden
-      run_specs "vaultwarden,api.vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts
+      run_specs "vaultwarden" tests/deep/forward-auth/vault.spec.ts tests/deep/forward-auth/vaultwarden-boundary.spec.ts
       ;;
     deep:vaultwarden-oidc)
       require_services caddy keycloak vaultwarden
-      run_specs "vaultwarden,api.vaultwarden" tests/deep/oidc/vaultwarden.spec.ts
+      run_specs "vaultwarden" tests/deep/oidc/vaultwarden.spec.ts
       ;;
     deep:session)
       require_services caddy keycloak keycloak-auth-gateway jupyterhub prometheus portal grafana bookstack

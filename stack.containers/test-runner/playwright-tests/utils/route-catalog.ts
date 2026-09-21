@@ -429,7 +429,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
-    host: 'api.element',
+    host: 'element',
     label: 'Element Bootstrap API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Element client bootstrap endpoint, not a human browser surface.' },
@@ -502,7 +502,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: true, visual: true, deep: false },
   },
   {
-    host: 'direct.homeassistant',
+    host: 'home-native',
     label: 'Home Assistant Direct',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Direct device endpoint protected by Home Assistant native auth.' },
@@ -889,7 +889,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'api.homeassistant',
+    host: 'home-native',
     label: 'Home Assistant API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'API surface, not a browser UI.' },
@@ -903,21 +903,21 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'api.seafile',
+    host: 'files-native',
     label: 'Seafile API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Token/API surface, not a browser UI.' },
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'api.vaultwarden',
+    host: 'vaultwarden',
     label: 'Vaultwarden API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Bitwarden native API endpoint, not a browser UI.' },
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'api.mastodon',
+    host: 'mastodon',
     label: 'Mastodon API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Mastodon native app/API endpoint, not a browser UI.' },

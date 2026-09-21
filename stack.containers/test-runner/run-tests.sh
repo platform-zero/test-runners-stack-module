@@ -146,6 +146,9 @@ print_usage() {
     echo "  ts-mobile-smoke   Run Playwright mobile authenticated smoke tests"
     echo "  ts-mobile-auth    Run Playwright mobile auth/cookie regression tests"
     echo "  ts-mobile         Run all Playwright mobile suites"
+    echo "  android-smoke     Cold-boot the API 36 KVM emulator and verify Appium"
+    echo "  android-full      Run the Android harness on API 34 and API 36"
+    echo "  mobile-full       Run browser mobile coverage and the Android matrix"
     echo "  ts-e2e-smoke      Alias for ts-app-smoke"
     echo "  ts-e2e-deep       Run Playwright deep browser flows"
     echo "  ts-workflow       Alias for ts-e2e-deep"
@@ -659,7 +662,6 @@ podman_run_extra_host_args() {
         "alerts.$domain" \
         "grafana.$domain" \
         "vaultwarden.$domain" \
-        "api.vaultwarden.$domain" \
         "planka.$domain" \
         "bookstack.$domain" \
         "api.bookstack.$domain" \
@@ -668,24 +670,23 @@ podman_run_extra_host_args() {
         "donetick.$domain" \
         "erpnext.$domain" \
         "seafile.$domain" \
-        "api.seafile.$domain" \
+        "files-native.$domain" \
         "onlyoffice.$domain" \
         "matrix.$domain" \
         "api.matrix.$domain" \
         "matrix-rtc.$domain" \
         "element.$domain" \
-        "api.element.$domain" \
         "forgejo.$domain" \
         "git.$domain" \
         "homeassistant.$domain" \
-        "api.homeassistant.$domain" \
+        "home-native.$domain" \
         "jupyterhub.$domain" \
         "mail.$domain" \
         "huly.$domain" \
         "portal.$domain" \
         "mastodon.$domain" \
-        "api.mastodon.$domain" \
         "ntfy.$domain" \
+        "ntfy-native.$domain" \
         "opensearch.$domain" \
         "qbittorrent.$domain" \
         "www.$domain"; do
@@ -1327,6 +1328,26 @@ print_failed_tests() {
     awk '/^Test: / {sub(/^Test: /, ""); print}' "$dir/failures.log"
 }
 
+run_android_unit() {
+    local unit="webservices-android-test-runner-api${1}.service"
+    local uid runtime
+    uid="$(id -u "$WEBSERVICES_ROOTLESS_USER")"
+    runtime="/run/user/$uid"
+    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
+      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+      systemctl --user reset-failed "$unit" || true
+    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
+      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+      systemctl --user start --wait "$unit"
+}
+
+run_android_matrix() {
+    run_android_unit 34
+    run_android_unit 36
+}
+
 print_test_catalog() {
     print_test_plan all
     echo ""
@@ -1334,7 +1355,7 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile android-smoke android-full mobile-full ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
     printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
@@ -1346,7 +1367,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|android-smoke|android-full|mobile-full|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -1429,6 +1450,16 @@ case "$COMMAND" in
         ;;
     ts-mobile)
         run_runner ts-mobile "$@"
+        ;;
+    android-smoke)
+        run_android_unit 36
+        ;;
+    android-full)
+        run_android_matrix
+        ;;
+    mobile-full)
+        run_runner ts-mobile "$@"
+        run_android_matrix
         ;;
     ts-e2e-smoke)
         run_runner ts-app-smoke "$@"
