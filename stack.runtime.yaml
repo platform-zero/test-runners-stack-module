@@ -10,6 +10,7 @@ services:
       containerfile: "./stack.containers/android-test-runner/Containerfile"
     containerName: "android-test-runner-api36"
     lifecycle: "on-demand"
+    quadletManaged: true
     updatePolicy: "pinned"
     placement: "rootless"
     environment:
@@ -45,6 +46,7 @@ services:
       containerfile: "./stack.containers/android-test-runner/Containerfile"
     containerName: "android-test-runner-api34"
     lifecycle: "on-demand"
+    quadletManaged: true
     updatePolicy: "pinned"
     placement: "rootless"
     environment:
