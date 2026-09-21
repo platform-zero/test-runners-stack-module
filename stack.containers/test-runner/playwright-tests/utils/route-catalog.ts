@@ -688,6 +688,13 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
+    host: 'ntfy-native',
+    label: 'ntfy Native API',
+    kind: 'non_ui',
+    anonymous: { kind: 'non_ui', reason: 'Native token-authenticated notification endpoint.' },
+    ownership: { route: true, smoke: false, visual: false, deep: true },
+  },
+  {
     host: 'onlyoffice',
     label: 'OnlyOffice Stub',
     kind: 'non_ui',
