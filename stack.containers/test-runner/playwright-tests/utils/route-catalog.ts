@@ -429,13 +429,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: true, deep: true },
   },
   {
-    host: 'element',
-    label: 'Element Bootstrap API',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'Element client bootstrap endpoint, not a human browser surface.' },
-    ownership: { route: true, smoke: false, visual: false, deep: true },
-  },
-  {
     host: 'forgejo',
     label: 'Forgejo',
     kind: 'oidc_login',
@@ -889,13 +882,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
-    host: 'home-native',
-    label: 'Home Assistant API',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'API surface, not a browser UI.' },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
     host: 'api.matrix',
     label: 'Matrix API',
     kind: 'non_ui',
@@ -907,20 +893,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
     label: 'Seafile API',
     kind: 'non_ui',
     anonymous: { kind: 'non_ui', reason: 'Token/API surface, not a browser UI.' },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
-    host: 'vaultwarden',
-    label: 'Vaultwarden API',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'Bitwarden native API endpoint, not a browser UI.' },
-    ownership: { route: true, smoke: false, visual: false, deep: false },
-  },
-  {
-    host: 'mastodon',
-    label: 'Mastodon API',
-    kind: 'non_ui',
-    anonymous: { kind: 'non_ui', reason: 'Mastodon native app/API endpoint, not a browser UI.' },
     ownership: { route: true, smoke: false, visual: false, deep: false },
   },
   {
