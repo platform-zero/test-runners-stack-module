@@ -5,6 +5,22 @@ import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
 
 export type RouteKind = 'public' | 'forward_auth' | 'oidc_login' | 'non_ui' | 'orphaned';
 
+type RouteUser = {
+  username: string;
+  email: string;
+  password?: string;
+  displayName?: string;
+};
+
+async function waitForBodyMatch(page: Page, matcher: RegExp, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const content = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    if (matcher.test(content)) return;
+    await page.waitForTimeout(500);
+  }
+  throw new Error(message);
+}
+
 export type AnonymousContract =
   | { kind: 'public_page'; matcher: RegExp; path?: string }
   | { kind: 'forward_auth'; path?: string }
@@ -16,7 +32,7 @@ export type AnonymousContract =
 export type SmokeContract = {
   matcher: RegExp;
   path?: string;
-  pathForUser?: (user: { username: string; email: string }) => string;
+  pathForUser?: (user: RouteUser) => string;
   selector?: string;
   loginLabel?: string;
   disallowMatcher?: RegExp;
@@ -24,8 +40,8 @@ export type SmokeContract = {
   headers?: Record<string, string>;
   oidcStartPath?: string;
   oidcStartSuccessUrlMatcher?: RegExp;
-  preAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
-  postAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
+  preAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
+  postAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
 };
 
 export type VisualContract = SmokeContract & {
@@ -33,7 +49,7 @@ export type VisualContract = SmokeContract & {
   fullPage?: boolean;
   quality?: number;
   maxDarkPixelRatio?: number;
-  prepare?: (page: Page, user: { username: string; email: string }) => Promise<void>;
+  prepare?: (page: Page, user: RouteUser) => Promise<void>;
 };
 
 export type BrowserRoute = {
@@ -317,15 +333,39 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     visual: {
       fileStem: 'huly-authenticated',
-      matcher: /Platform|Sign Up|Log In|Forgot your password|Continue as a guest/i,
-      selector: 'text=/Sign Up|Log In|Continue as a guest/i',
-      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
+      matcher: /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
+      selector: 'body',
+      disallowMatcher: /Sign Up|Log In|Forgot your password|Continue as a guest|Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
-        const credentials = page.getByRole('textbox');
-        await credentials.first().fill(user.email);
-        await credentials.nth(1).fill('visual-review-only');
-        await page.getByText('Required field Email', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
-        await page.getByText('Required field Password', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
+        if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
+        // Edge authentication proves the gateway identity, but Huly keeps a separate
+        // application account. Create the disposable Playwright account on first run,
+        // then log in through Huly itself so this capture proves the app session too.
+        const signUp = page.getByText('Sign Up', { exact: true }).first();
+        if (await signUp.isVisible().catch(() => false)) {
+          await signUp.click({ force: true });
+          const email = page.getByLabel(/email/i).first().or(page.locator('input[type="email"]').first());
+          await email.fill(user.email);
+          const passwords = page.locator('input[type="password"]');
+          const passwordCount = await passwords.count();
+          for (let index = 0; index < passwordCount; index += 1) {
+            await passwords.nth(index).fill(user.password);
+          }
+          const name = page.getByLabel(/name|full name/i).first().or(page.locator('input[type="text"]').first());
+          if (await name.isVisible().catch(() => false)) {
+            await name.fill(user.displayName || 'Playwright User');
+          }
+          const submit = page.getByRole('button', { name: /sign up|create account|register|continue/i }).last();
+          await submit.click({ force: true });
+        } else {
+          const email = page.getByLabel(/email/i).first().or(page.locator('input[type="email"]').first());
+          const password = page.locator('input[type="password"]').first();
+          await email.fill(user.email);
+          await password.fill(user.password);
+          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+        }
+        await waitForBodyMatch(page, /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
+          'Huly application session should reach its workspace UI after signup/login');
       },
       quality: 85,
       fullPage: false,
@@ -868,6 +908,24 @@ export const browserRouteCatalog: BrowserRoute[] = [
           }
         }
         await page.waitForURL((url) => /keycloak|identity\/connect\/authorize/i.test(url.toString()), { timeout: 20000 }).catch(() => {});
+      },
+      prepare: async (page, user) => {
+        if (!user.password) throw new Error('Vaultwarden visual enrollment requires the generated test password');
+        const passwords = page.locator('input[type="password"]');
+        const passwordCount = await passwords.count();
+        if (passwordCount >= 2) {
+          // A fresh SSO user must finish Vaultwarden's organization enrollment.
+          // Reusing the generated test password leaves a real authenticated vault
+          // session without persisting any fixture secret in the repository.
+          await passwords.nth(0).fill(user.password);
+          await passwords.nth(1).fill(user.password);
+          const submit = page.getByRole('button', { name: /join organization|continue|save|set password/i }).last();
+          if (await submit.isVisible().catch(() => false)) {
+            await submit.click({ force: true });
+          }
+        }
+        await waitForBodyMatch(page, /My Vault|Vaults|Folders|Items|Search vault|No items/i,
+          'Vaultwarden should complete first-user enrollment into the authenticated vault');
       },
       quality: 85,
       fullPage: false,
