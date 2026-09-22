@@ -346,24 +346,22 @@ export const browserRouteCatalog: BrowserRoute[] = [
         const signUp = page.getByText('Sign Up', { exact: true }).first();
         if (await signUp.isVisible().catch(() => false)) {
           await signUp.click({ force: true });
-          const email = page.getByLabel(/email/i).first().or(page.locator('input[type="email"]').first());
-          await email.fill(user.email);
-          const passwords = page.locator('input[type="password"]');
-          const passwordCount = await passwords.count();
-          for (let index = 0; index < passwordCount; index += 1) {
-            await passwords.nth(index).fill(user.password);
+          const fields = page.getByRole('textbox');
+          await fields.nth(0).fill(user.email);
+          const fieldCount = await fields.count();
+          for (let index = 1; index < fieldCount; index += 1) {
+            await fields.nth(index).fill(user.password);
           }
-          const name = page.getByLabel(/name|full name/i).first().or(page.locator('input[type="text"]').first());
+          const name = page.getByLabel(/name|full name/i).first();
           if (await name.isVisible().catch(() => false)) {
             await name.fill(user.displayName || 'Playwright User');
           }
           const submit = page.getByRole('button', { name: /sign up|create account|register|continue/i }).last();
           await submit.click({ force: true });
         } else {
-          const email = page.getByLabel(/email/i).first().or(page.locator('input[type="email"]').first());
-          const password = page.locator('input[type="password"]').first();
-          await email.fill(user.email);
-          await password.fill(user.password);
+          const fields = page.getByRole('textbox');
+          await fields.nth(0).fill(user.email);
+          await fields.nth(1).fill(user.password);
           await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
         }
         await waitForBodyMatch(page, /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
