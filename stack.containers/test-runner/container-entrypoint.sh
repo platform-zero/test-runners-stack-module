@@ -204,6 +204,10 @@ record_playwright_suite_artifacts() {
         copy_tree "$RESULTS_DIR/screenshots" "$suite_root/screenshots"
     fi
 
+    if [ -f "$RESULTS_DIR/visual-review.json" ]; then
+        cp "$RESULTS_DIR/visual-review.json" "$suite_root/visual-review.json"
+    fi
+
     chown -R "${TEST_USER}:${TEST_USER}" "$suite_root"
 }
 

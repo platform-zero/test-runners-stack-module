@@ -118,10 +118,16 @@ describe('suite orchestration', () => {
   it('preserves per-group Playwright artifacts during aggregate runs', () => {
     const script = fs.readFileSync(suiteScript, 'utf8');
     const config = fs.readFileSync(path.join(repoRoot, 'playwright.config.ts'), 'utf8');
+    const entrypointPath = resolveRequiredFile('container-entrypoint.sh', [
+      '/container-entrypoint.sh',
+      path.resolve(repoRoot, '..', 'container-entrypoint.sh'),
+    ]);
+    const entrypoint = fs.readFileSync(entrypointPath, 'utf8');
 
     expect(script).toContain('PLAYWRIGHT_RUN_LABEL="${group//:/-}"');
     expect(config).toContain("artifactPath('test-results')");
     expect(config).toContain("artifactPath('playwright-report')");
+    expect(entrypoint).toContain('cp "$RESULTS_DIR/visual-review.json" "$suite_root/visual-review.json"');
   });
 
   it('invokes the visual validator through its package entrypoint rather than a copied bin shim', () => {
