@@ -503,9 +503,14 @@ export async function captureVisualSnapshot(
     postAuthenticate: visual.postAuthenticate,
   };
 
+  if (visual.prepareBeforeSmoke && typeof visual.prepare === 'function') {
+    await gotoWithRetry(page, routeUrl(route, visual.path));
+    await visual.prepare(page, user);
+  }
+
   await assertSmokeContract(page, { ...route, smoke: effectiveSmoke }, user);
 
-  if (typeof visual.prepare === 'function') {
+  if (typeof visual.prepare === 'function' && !visual.prepareBeforeSmoke) {
     await visual.prepare(page, user);
   }
 

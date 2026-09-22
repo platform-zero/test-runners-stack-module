@@ -50,6 +50,7 @@ export type VisualContract = SmokeContract & {
   quality?: number;
   maxDarkPixelRatio?: number;
   prepare?: (page: Page, user: RouteUser) => Promise<void>;
+  prepareBeforeSmoke?: boolean;
 };
 
 export type BrowserRoute = {
@@ -335,6 +336,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
       fileStem: 'huly-authenticated',
       matcher: /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
       selector: 'body',
+      prepareBeforeSmoke: true,
       disallowMatcher: /Sign Up|Log In|Forgot your password|Continue as a guest|Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
