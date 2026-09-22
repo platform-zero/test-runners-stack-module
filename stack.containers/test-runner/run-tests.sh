@@ -45,8 +45,8 @@ DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
-WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
-WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
+WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/mnt/stack/podman/test-runners/state}"
+WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices-test-runners}"
 DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="$WEBSERVICES_ROOTLESS_USER"
 if [[ "$DEFAULT_TEST_RUNNER_NETWORK_DOMAIN" == webservices-* ]]; then
     DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="${DEFAULT_TEST_RUNNER_NETWORK_DOMAIN#webservices-}"
@@ -253,7 +253,7 @@ rootless_user_env() {
 require_webservices_user() {
     if [ "$(id -un)" != "$WEBSERVICES_ROOTLESS_USER" ]; then
         echo -e "${RED}Error:${NC} deployed stack tests must run as $WEBSERVICES_ROOTLESS_USER." >&2
-        echo "Use: ssh webservices-local '$0 <command>'" >&2
+        echo "Use: ssh $WEBSERVICES_ROOTLESS_USER@<host> '$0 <command>'" >&2
         exit 1
     fi
 }
