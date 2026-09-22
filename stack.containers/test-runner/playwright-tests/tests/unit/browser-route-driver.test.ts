@@ -634,7 +634,8 @@ describe('browser-route-driver', () => {
 
   describe('captureVisualSnapshot', () => {
     it('reuses the smoke flow and writes a screenshot into the visual output directory', async () => {
-      const screenshotRoot = fs.mkdtempSync('/tmp/webservices-visual-test-');
+      const testRoot = fs.mkdtempSync('/tmp/webservices-visual-test-');
+      const screenshotRoot = path.join(testRoot, 'screenshots');
       const page = createPage({
         locators: {
           '#visual-ready': createLocator({ visible: true }),
@@ -684,7 +685,8 @@ describe('browser-route-driver', () => {
     });
 
     it('recaptures a frame that fails its pixel contract before recording evidence', async () => {
-      const screenshotRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
+      const testRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
+      const screenshotRoot = path.join(testRoot, 'screenshots');
       const page = createPage({
         locators: {
           '#visual-ready': createLocator({ visible: true }),
