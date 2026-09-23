@@ -347,6 +347,10 @@ export const browserRouteCatalog: BrowserRoute[] = [
         const signUp = page.getByText('Sign Up', { exact: true }).first();
         if (await signUp.isVisible().catch(() => false)) {
           await signUp.click({ force: true });
+          await page.waitForTimeout(500);
+          if (await page.getByRole('button', { name: /^Log In$/i }).isVisible().catch(() => false)) {
+            await page.goto(`${routeUrl(findRoute('huly'))}/login%3Acomponent%3ASignupApp`, { waitUntil: 'domcontentloaded' });
+          }
           const fields = page.getByRole('textbox');
           await fields.nth(0).fill(user.email);
           const fieldCount = await fields.count();
@@ -920,7 +924,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
           // session without persisting any fixture secret in the repository.
           await passwords.nth(0).fill(user.password);
           await passwords.nth(1).fill(user.password);
-          const submit = page.getByRole('button', { name: /join organization|continue|save|set password/i }).last();
+          const submit = page.getByRole('button', { name: /join organization|create account|continue|save|set password/i }).last();
           if (await submit.isVisible().catch(() => false)) {
             await submit.click({ force: true });
           }
