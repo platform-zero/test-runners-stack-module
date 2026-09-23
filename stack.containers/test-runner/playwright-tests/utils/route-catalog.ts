@@ -929,6 +929,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
             await submit.click({ force: true });
           }
           const addLater = page.getByRole('button', { name: /add it later/i });
+          await addLater.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
           if (await addLater.isVisible().catch(() => false)) {
             await addLater.click({ force: true });
           }
