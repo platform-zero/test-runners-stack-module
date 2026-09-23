@@ -932,6 +932,11 @@ export const browserRouteCatalog: BrowserRoute[] = [
           await addLater.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
           if (await addLater.isVisible().catch(() => false)) {
             await addLater.click({ force: true });
+            const skipToWebApp = page.getByText(/skip to web app/i).first();
+            await skipToWebApp.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+            if (await skipToWebApp.isVisible().catch(() => false)) {
+              await skipToWebApp.click({ force: true });
+            }
           }
         }
         await waitForBodyMatch(page, /My Vault|Vaults|Folders|Items|Search vault|No items/i,
