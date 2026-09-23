@@ -429,9 +429,7 @@ export async function assertSmokeContract(page: Page, route: BrowserRoute, user:
   await gotoWithRetry(page, routeUrl(route, targetPath));
 
   if (route.kind === 'public') {
-    if (!route.smoke.prepareBeforeSmoke) {
-      await waitForSmokeReady(page, route.smoke, route);
-    }
+    await waitForSmokeReady(page, route.smoke, route);
     return;
   }
 
@@ -443,7 +441,9 @@ export async function assertSmokeContract(page: Page, route: BrowserRoute, user:
       }
     }
 
-    await waitForSmokeReady(page, route.smoke, route);
+    if (!route.smoke.prepareBeforeSmoke) {
+      await waitForSmokeReady(page, route.smoke, route);
+    }
     return;
   }
 
