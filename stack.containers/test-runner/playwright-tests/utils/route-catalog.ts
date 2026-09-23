@@ -42,6 +42,7 @@ export type SmokeContract = {
   oidcStartSuccessUrlMatcher?: RegExp;
   preAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
   postAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
+  prepareBeforeSmoke?: boolean;
 };
 
 export type VisualContract = SmokeContract & {

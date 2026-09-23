@@ -429,7 +429,9 @@ export async function assertSmokeContract(page: Page, route: BrowserRoute, user:
   await gotoWithRetry(page, routeUrl(route, targetPath));
 
   if (route.kind === 'public') {
-    await waitForSmokeReady(page, route.smoke, route);
+    if (!route.smoke.prepareBeforeSmoke) {
+      await waitForSmokeReady(page, route.smoke, route);
+    }
     return;
   }
 
@@ -501,17 +503,17 @@ export async function captureVisualSnapshot(
     pathForUser: visual.pathForUser,
     preAuthenticate: visual.preAuthenticate,
     postAuthenticate: visual.postAuthenticate,
+    prepareBeforeSmoke: visual.prepareBeforeSmoke,
   };
-
-  if (visual.prepareBeforeSmoke && typeof visual.prepare === 'function') {
-    await gotoWithRetry(page, routeUrl(route, visual.path));
-    await visual.prepare(page, user);
-  }
 
   await assertSmokeContract(page, { ...route, smoke: effectiveSmoke }, user);
 
-  if (typeof visual.prepare === 'function' && !visual.prepareBeforeSmoke) {
+  if (typeof visual.prepare === 'function') {
     await visual.prepare(page, user);
+  }
+
+  if (visual.prepareBeforeSmoke) {
+    await waitForSmokeReady(page, effectiveSmoke, route);
   }
 
   if (visual.selector) {
