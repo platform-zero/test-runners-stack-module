@@ -928,6 +928,10 @@ export const browserRouteCatalog: BrowserRoute[] = [
           if (await submit.isVisible().catch(() => false)) {
             await submit.click({ force: true });
           }
+          const addLater = page.getByRole('button', { name: /add it later/i });
+          if (await addLater.isVisible().catch(() => false)) {
+            await addLater.click({ force: true });
+          }
         }
         await waitForBodyMatch(page, /My Vault|Vaults|Folders|Items|Search vault|No items/i,
           'Vaultwarden should complete first-user enrollment into the authenticated vault');
