@@ -356,17 +356,28 @@ export const browserRouteCatalog: BrowserRoute[] = [
           reportStage('workspace-ready');
           return;
         }
-        if (/503 Service Unavailable|Bad Gateway|Internal Server Error/i.test(initialBody)) {
-          reportStage('initial-service-error');
-        } else if (/Sign Up/i.test(initialBody)) {
-          reportStage('initial-signup-shell');
-        } else if (/Log In/i.test(initialBody)) {
-          reportStage('initial-login-shell');
-        } else if (!initialBody.trim()) {
-          reportStage('initial-empty-shell');
-        } else {
-          reportStage('initial-other-shell');
-        }
+        const uiKind = /503 Service Unavailable|Bad Gateway|Internal Server Error/i.test(initialBody)
+          ? 'error'
+          : /loading|initializing/i.test(initialBody)
+            ? 'loading'
+            : /log in|sign up|sign in|email|password/i.test(initialBody)
+              ? 'auth-copy'
+              : /workspace|inbox|projects/i.test(initialBody)
+                ? 'workspace-copy'
+                : /huly/i.test(initialBody)
+                  ? 'product-shell'
+                  : initialBody.trim() ? 'other' : 'empty';
+        reportStage(`initial-ui-${uiKind}`);
+        const fields = await page.locator('input').evaluateAll((inputs) => ({
+          email: inputs.some((input) => (input as HTMLInputElement).type === 'email'),
+          password: inputs.some((input) => (input as HTMLInputElement).type === 'password'),
+          other: inputs.some((input) => !['email', 'password'].includes((input as HTMLInputElement).type)),
+        }));
+        const fieldKind = fields.email && fields.password ? 'credentials'
+          : fields.email ? 'email'
+            : fields.password ? 'password'
+              : fields.other ? 'other' : 'none';
+        reportStage(`initial-fields-${fieldKind}`);
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
         // Edge authentication proves the gateway identity, but Huly has a separate
         // application account. Prefer signing into the existing disposable account;
