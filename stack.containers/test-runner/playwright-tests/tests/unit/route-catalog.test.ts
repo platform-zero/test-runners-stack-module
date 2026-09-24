@@ -92,7 +92,8 @@ describe('route-catalog', () => {
     expect(route.visual?.prepare?.toString()).toContain('initial-ui-${uiKind}');
     expect(route.visual?.prepare?.toString()).toContain('initial-fields-${fieldKind}');
     expect(route.visual?.prepare?.toString()).toContain('post-submit-ui-${finalUiKind}');
-    expect(route.visual?.prepare?.toString()).toContain('signUpVisible');
+    expect(route.visual?.prepare?.toString()).toContain("clickOIDCButton('OpenID'");
+    expect(route.visual?.prepare?.toString()).toContain('user.username, user.password');
   });
 
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {

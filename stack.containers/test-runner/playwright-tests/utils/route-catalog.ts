@@ -1,5 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { KeycloakLoginPage } from '../pages/KeycloakLoginPage';
+import { OIDCLoginPage } from '../pages/OIDCLoginPage';
+import { defaultIdentityProvider } from './identity-provider';
 import type { Page } from '@playwright/test';
 import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
 
@@ -378,73 +381,17 @@ export const browserRouteCatalog: BrowserRoute[] = [
             : fields.password ? 'password'
               : fields.other ? 'other' : 'none';
         reportStage(`initial-fields-${fieldKind}`);
-        if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
-        // Edge authentication proves the gateway identity, but Huly has a separate
-        // application account. Prefer signing into the existing disposable account;
-        // the shell can show Sign Up even after that account has already been created.
-        const passwordInput = page.locator('input[type="password"]').first();
-        let passwordVisible = await passwordInput.isVisible().catch(() => false);
-        const login = page.getByText('Log In', { exact: true }).last();
-        const signUp = page.getByText('Sign Up', { exact: true }).first();
-        const signUpVisible = await signUp.isVisible().catch(() => false);
-        reportStage(passwordVisible ? 'password-input-visible' : 'password-input-absent');
-        const loginVisible = await login.isVisible().catch(() => false);
-        reportStage(loginVisible ? 'login-button-visible' : 'login-button-absent');
-        // Global setup provisions a fresh managed identity for every run. If the
-        // shell offers first-run registration, create its disposable app account
-        // even when the default screen already contains login fields.
-        if (!signUpVisible && !passwordVisible && loginVisible) {
-          await login.click({ force: true });
-          reportStage('login-clicked');
-          const loginFormReady = await passwordInput.waitFor({ state: 'visible', timeout: 10000 })
-            .then(() => true).catch(() => false);
-          reportStage(loginFormReady ? 'login-form-ready' : 'login-form-timeout');
-          passwordVisible = await passwordInput.isVisible().catch(() => false);
-        }
-
-        if (passwordVisible && !signUpVisible) {
-          const emailInput = page.locator('input[type="email"]').first();
-          if (await emailInput.isVisible().catch(() => false)) {
-            await emailInput.fill(user.email);
-          } else {
-            await page.getByRole('textbox').first().fill(user.email);
-          }
-          await passwordInput.fill(user.password);
-          reportStage('login-credentials-filled');
-          reportStage('login-submit-started');
-          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
-          reportStage('login-submit-clicked');
-        } else {
-          // First-run path only: create the disposable application account.
-          if (!signUpVisible) {
-            reportStage('signup-button-absent');
-            throw new Error('Huly did not expose an application login or first-run signup form');
-          }
-          reportStage('signup-button-visible');
-          await signUp.click({ force: true });
-          reportStage('signup-clicked');
-          await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
-          reportStage('signup-form-ready');
-          const emailInput = page.locator('input[type="email"]').first();
-          if (await emailInput.isVisible().catch(() => false)) {
-            await emailInput.fill(user.email);
-          } else {
-            await page.getByRole('textbox').first().fill(user.email);
-          }
-          const passwordInputs = page.locator('input[type="password"]');
-          const passwordCount = await passwordInputs.count();
-          for (let index = 0; index < passwordCount; index += 1) {
-            await passwordInputs.nth(index).fill(user.password);
-          }
-          const name = page.getByLabel(/name|full name/i).first();
-          if (await name.isVisible().catch(() => false)) {
-            await name.fill(user.displayName || 'Playwright User');
-          }
-          reportStage('signup-credentials-filled');
-          reportStage('signup-submit-started');
-          await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
-            .click({ force: true });
-          reportStage('signup-submit-clicked');
+        if (!user.password) throw new Error('Huly OIDC flow requires the generated test password');
+        // Huly is configured with a Keycloak OpenID client. Authenticate through
+        // that supported identity boundary instead of creating local app accounts.
+        const oidcLogin = new OIDCLoginPage(page);
+        reportStage('login-submit-started');
+        await oidcLogin.clickOIDCButton('OpenID', { requireAuthRedirect: false });
+        reportStage('login-submit-clicked');
+        if (defaultIdentityProvider.isConsentUrl(page.url())) {
+          await oidcLogin.handleConsentScreen();
+        } else if (defaultIdentityProvider.isAuthUrl(page.url())) {
+          await new KeycloakLoginPage(page).login(user.username, user.password);
         }
         try {
           await waitForBodyMatch(page, HULY_WORKSPACE_READY,
