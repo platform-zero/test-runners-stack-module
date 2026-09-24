@@ -447,6 +447,23 @@ export const browserRouteCatalog: BrowserRoute[] = [
             'Huly application session should reach its workspace UI after signup/login');
           reportStage('workspace-ready');
         } catch (error) {
+          const finalBody = await page.locator('body').innerText().catch(() => '');
+          const finalUiKind = /invalid (?:email|password|credentials)|incorrect (?:email|password)|wrong password/i.test(finalBody)
+            ? 'invalid-credentials'
+            : /verify your email|email verification|check your inbox/i.test(finalBody)
+              ? 'email-verification'
+              : /choose (?:a )?workspace|select (?:a )?workspace/i.test(finalBody)
+                ? 'workspace-selection'
+                : /two.factor|verification code|authenticator/i.test(finalBody)
+                  ? 'verification-challenge'
+                  : /503 Service Unavailable|Bad Gateway|Internal Server Error/i.test(finalBody)
+                    ? 'service-error'
+                    : /loading|initializing/i.test(finalBody)
+                      ? 'loading'
+                      : /log in|sign up|sign in|email|password/i.test(finalBody)
+                        ? 'auth-required'
+                        : finalBody.trim() ? 'other' : 'empty';
+          reportStage(`post-submit-ui-${finalUiKind}`);
           reportStage('workspace-timeout');
           throw error;
         }
