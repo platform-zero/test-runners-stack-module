@@ -385,10 +385,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
         const passwordInput = page.locator('input[type="password"]').first();
         let passwordVisible = await passwordInput.isVisible().catch(() => false);
         const login = page.getByText('Log In', { exact: true }).last();
+        const signUp = page.getByText('Sign Up', { exact: true }).first();
+        const signUpVisible = await signUp.isVisible().catch(() => false);
         reportStage(passwordVisible ? 'password-input-visible' : 'password-input-absent');
         const loginVisible = await login.isVisible().catch(() => false);
         reportStage(loginVisible ? 'login-button-visible' : 'login-button-absent');
-        if (!passwordVisible && loginVisible) {
+        // Global setup provisions a fresh managed identity for every run. If the
+        // shell offers first-run registration, create its disposable app account
+        // even when the default screen already contains login fields.
+        if (!signUpVisible && !passwordVisible && loginVisible) {
           await login.click({ force: true });
           reportStage('login-clicked');
           const loginFormReady = await passwordInput.waitFor({ state: 'visible', timeout: 10000 })
@@ -397,7 +402,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
           passwordVisible = await passwordInput.isVisible().catch(() => false);
         }
 
-        if (passwordVisible) {
+        if (passwordVisible && !signUpVisible) {
           const emailInput = page.locator('input[type="email"]').first();
           if (await emailInput.isVisible().catch(() => false)) {
             await emailInput.fill(user.email);
@@ -411,8 +416,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
           reportStage('login-submit-clicked');
         } else {
           // First-run path only: create the disposable application account.
-          const signUp = page.getByText('Sign Up', { exact: true }).first();
-          if (!await signUp.isVisible().catch(() => false)) {
+          if (!signUpVisible) {
             reportStage('signup-button-absent');
             throw new Error('Huly did not expose an application login or first-run signup form');
           }

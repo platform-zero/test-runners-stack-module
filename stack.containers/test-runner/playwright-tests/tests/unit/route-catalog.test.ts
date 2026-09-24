@@ -92,6 +92,7 @@ describe('route-catalog', () => {
     expect(route.visual?.prepare?.toString()).toContain('initial-ui-${uiKind}');
     expect(route.visual?.prepare?.toString()).toContain('initial-fields-${fieldKind}');
     expect(route.visual?.prepare?.toString()).toContain('post-submit-ui-${finalUiKind}');
+    expect(route.visual?.prepare?.toString()).toContain('passwordVisible && !signUpVisible');
   });
 
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
