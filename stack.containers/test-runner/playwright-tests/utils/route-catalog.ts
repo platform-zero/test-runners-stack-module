@@ -398,10 +398,12 @@ export const browserRouteCatalog: BrowserRoute[] = [
           reportStage('openid-provider-unavailable');
         }
         let openidCallbackStatus: number | null = null;
+        let openidStartStatus: number | null = null;
         page.on('response', (response) => {
           try {
             const pathname = new URL(response.url()).pathname;
             if (pathname.endsWith('/auth/openid/callback')) openidCallbackStatus = response.status();
+            else if (pathname.endsWith('/auth/openid')) openidStartStatus = response.status();
           } catch {
             // Ignore malformed/non-HTTP response URLs; never emit a URL or body.
           }
@@ -442,13 +444,21 @@ export const browserRouteCatalog: BrowserRoute[] = [
               : openidCallbackStatus >= 300 ? '3xx'
                 : openidCallbackStatus >= 200 ? '2xx' : 'other';
         reportStage(`openid-callback-http-${callbackStatusKind}`);
+        const startStatusKind = openidStartStatus === null ? 'unobserved'
+          : openidStartStatus >= 500 ? '5xx'
+            : openidStartStatus >= 400 ? '4xx'
+              : openidStartStatus >= 300 ? '3xx'
+                : openidStartStatus >= 200 ? '2xx' : 'other';
+        reportStage(`openid-start-http-${startStatusKind}`);
         const postAuthUrl = new URL(page.url());
         const postAuthLocation = postAuthUrl.hostname.startsWith('keycloak.') ? 'keycloak'
           : postAuthUrl.hostname.startsWith('keycloak-auth.') ? 'auth-gateway'
             : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname === '/' ? 'app-root'
               : postAuthUrl.hostname.startsWith('huly.') && /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
                 : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
-                  : postAuthUrl.hostname.startsWith('huly.') ? 'huly-front'
+                  : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname.endsWith('/auth/openid') ? 'account-auth'
+                    : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname.startsWith('/_accounts/') ? 'account-api'
+                      : postAuthUrl.hostname.startsWith('huly.') ? 'huly-front'
                     : postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
                       : /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
                         : postAuthUrl.pathname === '/' ? 'app-root' : 'other';
