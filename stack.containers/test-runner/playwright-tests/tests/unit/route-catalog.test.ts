@@ -88,6 +88,7 @@ describe('route-catalog', () => {
     expect(route.visual?.matcher.test('Platform · Log In')).toBe(false);
     expect(route.visual?.disallowMatcher?.test('Forgot your password')).toBe(true);
     expect(route.visual?.prepare?.toString()).toContain('waitForBodyMatch(page, HULY_WORKSPACE_READY');
+    expect(route.visual?.prepare?.toString()).toContain('huly-prepare=');
   });
 
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {

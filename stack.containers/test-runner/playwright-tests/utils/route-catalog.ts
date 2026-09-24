@@ -346,6 +346,10 @@ export const browserRouteCatalog: BrowserRoute[] = [
       // visual.prepare separately proves that the authenticated workspace is visible.
       disallowMatcher: /Forgot your password|Continue as a guest|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
+        const reportStage = (stage: string) => {
+          console.log(`[p0-test-evidence] huly-prepare=${stage} route=huly`);
+        };
+        reportStage('prepare-started');
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
         // Edge authentication proves the gateway identity, but Huly has a separate
         // application account. Prefer signing into the existing disposable account;
@@ -353,9 +357,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
         const passwordInput = page.locator('input[type="password"]').first();
         let passwordVisible = await passwordInput.isVisible().catch(() => false);
         const login = page.getByRole('button', { name: /^Log In$/i }).last();
-        if (!passwordVisible && await login.isVisible().catch(() => false)) {
+        reportStage(passwordVisible ? 'password-input-visible' : 'password-input-absent');
+        const loginVisible = await login.isVisible().catch(() => false);
+        reportStage(loginVisible ? 'login-button-visible' : 'login-button-absent');
+        if (!passwordVisible && loginVisible) {
           await login.click({ force: true });
-          await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
+          reportStage('login-clicked');
+          const loginFormReady = await passwordInput.waitFor({ state: 'visible', timeout: 10000 })
+            .then(() => true).catch(() => false);
+          reportStage(loginFormReady ? 'login-form-ready' : 'login-form-timeout');
           passwordVisible = await passwordInput.isVisible().catch(() => false);
         }
 
@@ -367,15 +377,22 @@ export const browserRouteCatalog: BrowserRoute[] = [
             await page.getByRole('textbox').first().fill(user.email);
           }
           await passwordInput.fill(user.password);
+          reportStage('login-credentials-filled');
+          reportStage('login-submit-started');
           await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+          reportStage('login-submit-clicked');
         } else {
           // First-run path only: create the disposable application account.
           const signUp = page.getByText('Sign Up', { exact: true }).first();
           if (!await signUp.isVisible().catch(() => false)) {
+            reportStage('signup-button-absent');
             throw new Error('Huly did not expose an application login or first-run signup form');
           }
+          reportStage('signup-button-visible');
           await signUp.click({ force: true });
+          reportStage('signup-clicked');
           await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
+          reportStage('signup-form-ready');
           const emailInput = page.locator('input[type="email"]').first();
           if (await emailInput.isVisible().catch(() => false)) {
             await emailInput.fill(user.email);
@@ -391,11 +408,20 @@ export const browserRouteCatalog: BrowserRoute[] = [
           if (await name.isVisible().catch(() => false)) {
             await name.fill(user.displayName || 'Playwright User');
           }
+          reportStage('signup-credentials-filled');
+          reportStage('signup-submit-started');
           await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
             .click({ force: true });
+          reportStage('signup-submit-clicked');
         }
-        await waitForBodyMatch(page, HULY_WORKSPACE_READY,
-          'Huly application session should reach its workspace UI after signup/login');
+        try {
+          await waitForBodyMatch(page, HULY_WORKSPACE_READY,
+            'Huly application session should reach its workspace UI after signup/login');
+          reportStage('workspace-ready');
+        } catch (error) {
+          reportStage('workspace-timeout');
+          throw error;
+        }
       },
       quality: 85,
       fullPage: false,
