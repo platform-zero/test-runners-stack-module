@@ -89,7 +89,8 @@ describe('route-catalog', () => {
     expect(route.visual?.disallowMatcher?.test('Forgot your password')).toBe(true);
     expect(route.visual?.prepare?.toString()).toContain('waitForBodyMatch(page, HULY_WORKSPACE_READY');
     expect(route.visual?.prepare?.toString()).toContain('huly-prepare=');
-    expect(route.visual?.prepare?.toString()).toContain('initial-other-shell');
+    expect(route.visual?.prepare?.toString()).toContain('initial-ui-${uiKind}');
+    expect(route.visual?.prepare?.toString()).toContain('initial-fields-${fieldKind}');
   });
 
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
