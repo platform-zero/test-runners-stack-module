@@ -443,10 +443,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
                 : openidCallbackStatus >= 200 ? '2xx' : 'other';
         reportStage(`openid-callback-http-${callbackStatusKind}`);
         const postAuthUrl = new URL(page.url());
-        const postAuthLocation = defaultIdentityProvider.isAuthUrl(page.url()) ? 'keycloak'
-          : postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
-            : /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
-              : postAuthUrl.pathname === '/' ? 'app-root' : 'other';
+        const postAuthLocation = postAuthUrl.hostname.startsWith('keycloak.') ? 'keycloak'
+          : postAuthUrl.hostname.startsWith('keycloak-auth.') ? 'auth-gateway'
+            : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname === '/' ? 'app-root'
+              : postAuthUrl.hostname.startsWith('huly.') && /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
+                : postAuthUrl.hostname.startsWith('huly.') && postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
+                  : postAuthUrl.hostname.startsWith('huly.') ? 'huly-front'
+                    : postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
+                      : /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
+                        : postAuthUrl.pathname === '/' ? 'app-root' : 'other';
         reportStage(`post-auth-location-${postAuthLocation}`);
         try {
           await waitForBodyMatch(page, HULY_WORKSPACE_READY,
