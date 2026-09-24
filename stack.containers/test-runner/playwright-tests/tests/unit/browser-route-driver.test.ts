@@ -68,6 +68,7 @@ import {
   assertAnonymousContract,
   assertSmokeContract,
   captureVisualSnapshot,
+  classifyHulyReadiness,
   isBookStackTransientOidcErrorState,
 } from '../../utils/drivers/browser-route-driver';
 
@@ -213,6 +214,14 @@ describe('browser-route-driver', () => {
           'https://bookstack.datamancy.net/books'
         )
       ).toBe(false);
+    });
+  });
+
+  describe('classifyHulyReadiness', () => {
+    it('projects Huly login prompts to a safe authorization category', () => {
+      expect(classifyHulyReadiness('Forgot your password?')).toBe('authorization');
+      expect(classifyHulyReadiness('Continue as a guest')).toBe('authorization');
+      expect(classifyHulyReadiness('My Workspaces · Log In')).toBeNull();
     });
   });
 
@@ -401,6 +410,36 @@ describe('browser-route-driver', () => {
   });
 
   describe('assertSmokeContract', () => {
+    it('uses visible body text instead of hidden DOM text for readiness and disallow checks', async () => {
+      const bodyLocator = createLocator({ visible: true });
+      bodyLocator.innerText = jest.fn(async () => 'Demo Ready');
+      const page = createPage({
+        bodyText: 'Demo Ready Log In',
+        locators: {
+          body: bodyLocator,
+          '#ready': createLocator({ visible: true }),
+        },
+        onGoto: (_url, currentPage) => {
+          currentPage.__setUrl('https://status.datamancy.net/');
+          currentPage.__setBody('Demo Ready Log In');
+        },
+      });
+      const route = createRoute({
+        host: 'status',
+        label: 'Status',
+        kind: 'public',
+        smoke: {
+          path: '/',
+          matcher: /Demo Ready/,
+          selector: '#ready',
+          disallowMatcher: /Log In/,
+        },
+      });
+
+      await expect(assertSmokeContract(page, route, user)).resolves.toBeUndefined();
+      expect(bodyLocator.innerText).toHaveBeenCalled();
+    });
+
     it('validates public smoke routes', async () => {
       const page = createPage({
         locators: {

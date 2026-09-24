@@ -3,6 +3,8 @@ import * as path from 'path';
 import type { Page } from '@playwright/test';
 import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
 
+const HULY_WORKSPACE_READY = /My Workspaces|Inbox|Projects|Create workspace/i;
+
 export type RouteKind = 'public' | 'forward_auth' | 'oidc_login' | 'non_ui' | 'orphaned';
 
 type RouteUser = {
@@ -43,6 +45,7 @@ export type SmokeContract = {
   preAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
   postAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
   prepareBeforeSmoke?: boolean;
+  readinessTimeoutMs?: number;
 };
 
 export type VisualContract = SmokeContract & {
@@ -335,41 +338,63 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     visual: {
       fileStem: 'huly-authenticated',
-      matcher: /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
+      matcher: HULY_WORKSPACE_READY,
       selector: 'body',
       prepareBeforeSmoke: true,
-      disallowMatcher: /Sign Up|Log In|Forgot your password|Continue as a guest|Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
+      readinessTimeoutMs: 120000,
+      // Huly keeps generic Sign Up/Log In controls in its application shell;
+      // visual.prepare separately proves that the authenticated workspace is visible.
+      disallowMatcher: /Forgot your password|Continue as a guest|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
-        // Edge authentication proves the gateway identity, but Huly keeps a separate
-        // application account. Create the disposable Playwright account on first run,
-        // then log in through Huly itself so this capture proves the app session too.
-        const signUp = page.getByText('Sign Up', { exact: true }).first();
-        if (await signUp.isVisible().catch(() => false)) {
-          await signUp.click({ force: true });
-          await page.waitForTimeout(500);
-          if (await page.getByRole('button', { name: /^Log In$/i }).isVisible().catch(() => false)) {
-            await page.goto(`${routeUrl(findRoute('huly'))}/login%3Acomponent%3ASignupApp`, { waitUntil: 'domcontentloaded' });
+        // Edge authentication proves the gateway identity, but Huly has a separate
+        // application account. Prefer signing into the existing disposable account;
+        // the shell can show Sign Up even after that account has already been created.
+        const passwordInput = page.locator('input[type="password"]').first();
+        let passwordVisible = await passwordInput.isVisible().catch(() => false);
+        const login = page.getByRole('button', { name: /^Log In$/i }).last();
+        if (!passwordVisible && await login.isVisible().catch(() => false)) {
+          await login.click({ force: true });
+          await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
+          passwordVisible = await passwordInput.isVisible().catch(() => false);
+        }
+
+        if (passwordVisible) {
+          const emailInput = page.locator('input[type="email"]').first();
+          if (await emailInput.isVisible().catch(() => false)) {
+            await emailInput.fill(user.email);
+          } else {
+            await page.getByRole('textbox').first().fill(user.email);
           }
-          const fields = page.getByRole('textbox');
-          await fields.nth(0).fill(user.email);
-          const fieldCount = await fields.count();
-          for (let index = 1; index < fieldCount; index += 1) {
-            await fields.nth(index).fill(user.password);
+          await passwordInput.fill(user.password);
+          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+        } else {
+          // First-run path only: create the disposable application account.
+          const signUp = page.getByText('Sign Up', { exact: true }).first();
+          if (!await signUp.isVisible().catch(() => false)) {
+            throw new Error('Huly did not expose an application login or first-run signup form');
+          }
+          await signUp.click({ force: true });
+          await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
+          const emailInput = page.locator('input[type="email"]').first();
+          if (await emailInput.isVisible().catch(() => false)) {
+            await emailInput.fill(user.email);
+          } else {
+            await page.getByRole('textbox').first().fill(user.email);
+          }
+          const passwordInputs = page.locator('input[type="password"]');
+          const passwordCount = await passwordInputs.count();
+          for (let index = 0; index < passwordCount; index += 1) {
+            await passwordInputs.nth(index).fill(user.password);
           }
           const name = page.getByLabel(/name|full name/i).first();
           if (await name.isVisible().catch(() => false)) {
             await name.fill(user.displayName || 'Playwright User');
           }
-          const submit = page.getByRole('button', { name: /sign up|create account|register|continue/i }).last();
-          await submit.click({ force: true });
-        } else {
-          const fields = page.getByRole('textbox');
-          await fields.nth(0).fill(user.email);
-          await fields.nth(1).fill(user.password);
-          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+          await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
+            .click({ force: true });
         }
-        await waitForBodyMatch(page, /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
+        await waitForBodyMatch(page, HULY_WORKSPACE_READY,
           'Huly application session should reach its workspace UI after signup/login');
       },
       quality: 85,
@@ -624,10 +649,84 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jupyterhub-authenticated',
       path: '/user-redirect/lab',
-      matcher: /JupyterLab|Launcher|Notebook|Console|Terminal|File Browser/i,
-      selector: '.jp-LabShell, text=/JupyterLab|Launcher|Notebook|Console|Terminal/i',
+      matcher: /JupyterLab|Launcher|Notebook|Console|Terminal|File Browser|Files/i,
+      selector: '.jp-LabShell, text=/JupyterLab|Launcher|Notebook|Console|Terminal|Files/i',
       disallowMatcher: /Start My Server|503 Service Unavailable|Bad Gateway|Unauthorized/i,
+      prepareBeforeSmoke: true,
+      readinessTimeoutMs: 300000,
       prepare: async (page) => {
+        const userServerUrl = /\/user\/[^/]+\/(lab|tree)/;
+        const reportStage = (stage: string) => {
+          console.log(`[p0-test-evidence] jupyterhub-prepare=${stage} route=jupyterhub`);
+        };
+        const currentPageState = () => {
+          const pathname = new URL(page.url()).pathname;
+          if (/\/hub\/spawn-pending\//.test(pathname)) return 'spawn-pending';
+          if (userServerUrl.test(pathname)) return 'user-server';
+          if (/\/hub\/home\/?$/.test(pathname)) return 'hub-home';
+          if (/\/hub\/login\/?$/.test(pathname)) return 'hub-login';
+          return 'other';
+        };
+        reportStage('prepare-started');
+
+        if (/\/hub\/(home|login)/.test(page.url())) {
+          try {
+            await page.goto(serviceUrl('jupyterhub', '/user-redirect/lab'), {
+              waitUntil: 'domcontentloaded',
+              timeout: 30000,
+            });
+            reportStage(`redirect-${currentPageState()}`);
+          } catch {
+            reportStage('redirect-failed');
+          }
+        }
+
+        const startServer = page.locator(
+          '#start, button:has-text("Start My Server"), a:has-text("Start My Server")'
+        ).first();
+        const startVisible = await startServer.isVisible().catch(() => false);
+        reportStage(startVisible ? 'start-button-visible' : 'start-button-absent');
+        if (startVisible) {
+          try {
+            await startServer.click();
+            reportStage('start-click-succeeded');
+          } catch {
+            reportStage('start-click-failed');
+          }
+          const spawnObserved = await page.waitForURL((url) =>
+            /\/hub\/spawn-pending\//.test(url.pathname) || userServerUrl.test(url.pathname),
+          { timeout: 30000 }).then(() => true).catch(() => false);
+          reportStage(spawnObserved ? `start-transition-${currentPageState()}` : 'start-transition-timeout');
+        }
+
+        if (/\/hub\/home/.test(page.url())) {
+          const myServer = page.locator(
+            'a[href*="/user/"], a:has-text("My Server"), a:has-text("Launch Server")'
+          ).first();
+          if (await myServer.isVisible().catch(() => false)) {
+            try {
+              await myServer.click();
+              reportStage('home-server-link-click-succeeded');
+            } catch {
+              reportStage('home-server-link-click-failed');
+            }
+          } else {
+            reportStage('home-server-link-absent');
+            try {
+              await page.goto(serviceUrl('jupyterhub', '/user-redirect/lab'), {
+                waitUntil: 'domcontentloaded',
+                timeout: 30000,
+              });
+              reportStage(`home-redirect-${currentPageState()}`);
+            } catch {
+              reportStage('home-redirect-failed');
+            }
+          }
+        }
+
+        const userServerReady = await page.waitForURL(userServerUrl, { timeout: 300000 })
+          .then(() => true).catch(() => false);
+        reportStage(userServerReady ? 'user-server-ready' : `user-server-timeout-${currentPageState()}`);
         const declineNews = page.getByRole('button', { name: /^no$/i }).first();
         if (await declineNews.isVisible().catch(() => false)) {
           await declineNews.evaluate((element) => (element as HTMLElement).click());

@@ -62,6 +62,16 @@ async function combinedPageContent(page: Page): Promise<string> {
   return [title, bodyInnerText || '', bodyText || ''].filter(Boolean).join('\n');
 }
 
+async function combinedVisiblePageContent(page: Page): Promise<string> {
+  const body = page.locator('body').first();
+  const title = await page.title().catch(() => '');
+  const hasInnerText = typeof (body as unknown as { innerText?: unknown }).innerText === 'function';
+  const visibleBody = hasInnerText
+    ? await body.innerText({ timeout: 1000 }).catch(() => '')
+    : await page.textContent('body').catch(() => '');
+  return [title, visibleBody || ''].filter(Boolean).join('\n');
+}
+
 async function expectPageMatcher(page: Page, matcher: RegExp, description: string): Promise<void> {
   await expect
     .poll(async () => matcher.test(await combinedPageContent(page)), {
@@ -149,7 +159,8 @@ async function isSmokeReady(page: Page, smoke: SmokeContract): Promise<boolean> 
     return false;
   }
 
-  if (smoke.disallowMatcher?.test(content)) {
+  const visibleContent = await combinedVisiblePageContent(page);
+  if (smoke.disallowMatcher?.test(visibleContent)) {
     return false;
   }
 
@@ -158,6 +169,10 @@ async function isSmokeReady(page: Page, smoke: SmokeContract): Promise<boolean> 
   }
 
   return true;
+}
+
+export function classifyHulyReadiness(content: string): 'authorization' | null {
+  return /forgot your password|continue as a guest/i.test(content) ? 'authorization' : null;
 }
 
 async function expectIdentityLogin(page: Page): Promise<void> {
@@ -180,9 +195,10 @@ async function loginWithDefaultProvider(page: Page, user: BrowserTestUser): Prom
 }
 
 async function waitForSmokeReady(page: Page, smoke: SmokeContract, route: BrowserRoute): Promise<void> {
-  const deadline = Date.now() + 60000;
+  const deadline = Date.now() + Math.max(1000, smoke.readinessTimeoutMs ?? 60000);
   let nextRecoveryAt = Date.now() + 7000;
   let lastContent = '';
+  let lastVisibleContent = '';
 
   while (Date.now() < deadline) {
     await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
@@ -193,8 +209,11 @@ async function waitForSmokeReady(page: Page, smoke: SmokeContract, route: Browse
     }
 
     lastContent = await combinedPageContent(page);
-    const contentLooksStuck = lastContent.trim().length === 0 || /\bLoading\.\.\.|\btaking longer than usual\b/i.test(lastContent);
-    if (contentLooksStuck && smoke.path && Date.now() >= nextRecoveryAt) {
+    lastVisibleContent = await combinedVisiblePageContent(page);
+    const contentLooksStuck = lastVisibleContent.trim().length === 0 || /\bLoading\.\.\.|\btaking longer than usual\b/i.test(lastVisibleContent);
+    // JupyterHub's single-user server can legitimately show a loading shell for
+    // several minutes. Re-navigating to /user-redirect/lab interrupts that boot.
+    if (route.host !== 'jupyterhub' && contentLooksStuck && smoke.path && Date.now() >= nextRecoveryAt) {
       await gotoWithRetry(page, routeUrl(route, smoke.path)).catch(() => {});
       nextRecoveryAt = Date.now() + 7000;
     }
@@ -202,8 +221,31 @@ async function waitForSmokeReady(page: Page, smoke: SmokeContract, route: Browse
     await page.waitForTimeout(1000);
   }
 
+  const normalizedContent = lastContent.toLowerCase();
+  let readinessState = 'unclassified';
+  if (!normalizedContent.trim()) {
+    readinessState = 'empty-page';
+  } else if (route.host === 'jupyterhub' && /start my server/.test(normalizedContent)) {
+    readinessState = 'start-required';
+  } else if (route.host === 'jupyterhub' && /spawning server|server is starting up|spawn-pending/.test(normalizedContent)) {
+    readinessState = 'spawn-pending';
+  } else if (/503 service unavailable|bad gateway/.test(normalizedContent)) {
+    readinessState = 'service-unavailable';
+  } else if (/unauthorized|access denied/.test(normalizedContent)) {
+    readinessState = 'authorization';
+  } else if (route.host === 'huly' && classifyHulyReadiness(lastVisibleContent)) {
+    readinessState = 'authorization';
+  } else if (smoke.disallowUrlMatcher?.test(page.url())) {
+    readinessState = 'disallowed-url';
+  } else if (smoke.disallowMatcher?.test(lastVisibleContent)) {
+    readinessState = 'disallowed-content';
+  } else if (smoke.selector && !(await isAnySmokeSelectorVisible(page, smoke.selector))) {
+    readinessState = 'selector-missing';
+  } else if (!smoke.matcher.test(lastContent)) {
+    readinessState = 'expected-content-missing';
+  }
   const summary = lastContent.trim().replace(/\s+/g, ' ').slice(0, 240) || '<empty page>';
-  throw new Error(`${route.label} authenticated page did not satisfy smoke contract at ${redactUrlForLogs(page.url())}; content: ${summary}`);
+  throw new Error(`${route.label} authenticated page did not satisfy smoke contract [p0-test-evidence] smoke-readiness=${readinessState} route=${route.host} at ${redactUrlForLogs(page.url())}; content: ${summary}`);
 }
 
 function smokePathForUser(smoke: SmokeContract, user: BrowserTestUser): string | undefined {
@@ -504,6 +546,7 @@ export async function captureVisualSnapshot(
     preAuthenticate: visual.preAuthenticate,
     postAuthenticate: visual.postAuthenticate,
     prepareBeforeSmoke: visual.prepareBeforeSmoke,
+    readinessTimeoutMs: visual.readinessTimeoutMs,
   };
 
   await assertSmokeContract(page, { ...route, smoke: effectiveSmoke }, user);

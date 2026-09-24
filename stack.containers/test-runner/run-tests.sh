@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "[test-runner] command failed at line=%s status=%s\\n" "$LINENO" "$status" >&2; exit "$status"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR_DEFAULT=""
@@ -12,6 +13,9 @@ elif [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/quadlet" ]; then
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../quadlet" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/../../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../../quadlet" ]; then
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/runtime-model.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
@@ -644,6 +648,10 @@ loopback_endpoint_url() {
     printf 'http://host.containers.internal:%s\n' "$port"
 }
 
+optional_loopback_endpoint_url() {
+    loopback_endpoint_url "$@" 2>/dev/null || true
+}
+
 podman_run_extra_host_args() {
     local env_file="$1"
     local domain
@@ -775,7 +783,7 @@ podman_run_service_env_args() {
     emit_env_arg GRAFANA_URL "$(loopback_endpoint_url grafana 3000)"
     emit_env_arg HOMEASSISTANT_URL "$(loopback_endpoint_url homeassistant 8123)"
     emit_env_arg MASTODON_URL "$(loopback_endpoint_url mastodon-web 3000)"
-    emit_env_arg MASTODON_STREAMING_URL "$(loopback_endpoint_url mastodon-streaming 4000)"
+    emit_env_arg MASTODON_STREAMING_URL "$(optional_loopback_endpoint_url mastodon-streaming 4000)"
     emit_env_arg NTFY_URL "$(loopback_endpoint_url ntfy 80)"
     emit_env_arg ONLYOFFICE_URL "$(loopback_endpoint_url onlyoffice 80)"
     emit_env_arg PLANKA_URL "$(loopback_endpoint_url planka 1337)"

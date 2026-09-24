@@ -71,6 +71,25 @@ describe('route-catalog', () => {
     expect(new Set(browserWuiRoutes.map((route) => route.visual?.fileStem)).size).toBe(browserWuiRoutes.length);
   });
 
+  it('prepares a cold JupyterHub user server before waiting for its visual contract', () => {
+    const route = findRoute('jupyterhub');
+
+    expect(route.visual?.prepareBeforeSmoke).toBe(true);
+    expect(route.visual?.readinessTimeoutMs).toBe(300000);
+    expect(route.visual?.prepare).toBeDefined();
+    expect(route.visual?.matcher.test('Files')).toBe(true);
+    expect(route.visual?.selector).toContain('Files');
+  });
+
+  it('does not treat Huly shell account actions as an unauthenticated page after workspace preparation', () => {
+    const route = findRoute('huly');
+
+    expect(route.visual?.matcher.test('My Workspaces · Log In')).toBe(true);
+    expect(route.visual?.matcher.test('Platform · Log In')).toBe(false);
+    expect(route.visual?.disallowMatcher?.test('Forgot your password')).toBe(true);
+    expect(route.visual?.prepare?.toString()).toContain('waitForBodyMatch(page, HULY_WORKSPACE_READY');
+  });
+
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
     expect(mobileSmokeRoutes.map((route) => route.host).sort()).toEqual([
       'apex',
