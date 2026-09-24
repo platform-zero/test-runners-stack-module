@@ -381,7 +381,6 @@ export const browserRouteCatalog: BrowserRoute[] = [
             : fields.password ? 'password'
               : fields.other ? 'other' : 'none';
         reportStage(`initial-fields-${fieldKind}`);
-        if (!user.password) throw new Error('Huly OIDC flow requires the generated test password');
         // Huly is configured with a Keycloak OpenID client. Authenticate through
         // that supported identity boundary instead of creating local app accounts.
         const oidcLogin = new OIDCLoginPage(page);
@@ -391,6 +390,10 @@ export const browserRouteCatalog: BrowserRoute[] = [
         if (defaultIdentityProvider.isConsentUrl(page.url())) {
           await oidcLogin.handleConsentScreen();
         } else if (defaultIdentityProvider.isAuthUrl(page.url())) {
+          if (!user.password) {
+            reportStage('keycloak-password-absent');
+            throw new Error('Huly OpenID redirected to Keycloak without a managed test password');
+          }
           await new KeycloakLoginPage(page).login(user.username, user.password);
         }
         try {
