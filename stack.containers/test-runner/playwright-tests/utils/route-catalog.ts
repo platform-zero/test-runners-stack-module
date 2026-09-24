@@ -350,13 +350,30 @@ export const browserRouteCatalog: BrowserRoute[] = [
           console.log(`[p0-test-evidence] huly-prepare=${stage} route=huly`);
         };
         reportStage('prepare-started');
+        const initialBody = await page.locator('body').innerText().catch(() => '');
+        if (HULY_WORKSPACE_READY.test(initialBody)) {
+          reportStage('initial-workspace-visible');
+          reportStage('workspace-ready');
+          return;
+        }
+        if (/503 Service Unavailable|Bad Gateway|Internal Server Error/i.test(initialBody)) {
+          reportStage('initial-service-error');
+        } else if (/Sign Up/i.test(initialBody)) {
+          reportStage('initial-signup-shell');
+        } else if (/Log In/i.test(initialBody)) {
+          reportStage('initial-login-shell');
+        } else if (!initialBody.trim()) {
+          reportStage('initial-empty-shell');
+        } else {
+          reportStage('initial-other-shell');
+        }
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
         // Edge authentication proves the gateway identity, but Huly has a separate
         // application account. Prefer signing into the existing disposable account;
         // the shell can show Sign Up even after that account has already been created.
         const passwordInput = page.locator('input[type="password"]').first();
         let passwordVisible = await passwordInput.isVisible().catch(() => false);
-        const login = page.getByRole('button', { name: /^Log In$/i }).last();
+        const login = page.getByText('Log In', { exact: true }).last();
         reportStage(passwordVisible ? 'password-input-visible' : 'password-input-absent');
         const loginVisible = await login.isVisible().catch(() => false);
         reportStage(loginVisible ? 'login-button-visible' : 'login-button-absent');
