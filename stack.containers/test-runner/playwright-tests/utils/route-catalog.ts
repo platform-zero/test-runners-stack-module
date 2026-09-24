@@ -383,18 +383,28 @@ export const browserRouteCatalog: BrowserRoute[] = [
         reportStage(`initial-fields-${fieldKind}`);
         // Huly is configured with a Keycloak OpenID client. Authenticate through
         // that supported identity boundary instead of creating local app accounts.
-        const oidcLogin = new OIDCLoginPage(page);
         reportStage('login-submit-started');
-        await oidcLogin.clickOIDCButton('OpenID', { requireAuthRedirect: false });
-        reportStage('login-submit-clicked');
-        if (defaultIdentityProvider.isConsentUrl(page.url())) {
-          await oidcLogin.handleConsentScreen();
-        } else if (defaultIdentityProvider.isAuthUrl(page.url())) {
-          if (!user.password) {
-            reportStage('keycloak-password-absent');
-            throw new Error('Huly OpenID redirected to Keycloak without a managed test password');
+        let oidcLogin: OIDCLoginPage;
+        try {
+          oidcLogin = new OIDCLoginPage(page);
+          await oidcLogin.clickOIDCButton('OpenID', { requireAuthRedirect: false });
+          reportStage('login-submit-clicked');
+          if (defaultIdentityProvider.isConsentUrl(page.url())) {
+            await oidcLogin.handleConsentScreen();
+          } else if (defaultIdentityProvider.isAuthUrl(page.url())) {
+            if (!user.password) {
+              reportStage('keycloak-password-absent');
+              throw new Error('Huly OpenID redirected to Keycloak without a managed test password');
+            }
+            await new KeycloakLoginPage(page).login(user.username, user.password);
           }
-          await new KeycloakLoginPage(page).login(user.username, user.password);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : '';
+          const kind = /OIDC button\/link not found/i.test(message) ? 'entry-missing'
+            : /did not redirect to Keycloak/i.test(message) ? 'redirect-missing'
+              : /timeout|timed out/i.test(message) ? 'timeout' : 'other';
+          reportStage(`openid-flow-${kind}`);
+          throw error;
         }
         try {
           await waitForBodyMatch(page, HULY_WORKSPACE_READY,

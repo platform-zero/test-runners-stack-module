@@ -93,6 +93,7 @@ describe('route-catalog', () => {
     expect(route.visual?.prepare?.toString()).toContain('initial-fields-${fieldKind}');
     expect(route.visual?.prepare?.toString()).toContain('post-submit-ui-${finalUiKind}');
     expect(route.visual?.prepare?.toString()).toContain("clickOIDCButton('OpenID'");
+    expect(route.visual?.prepare?.toString()).toContain('openid-flow-${kind}');
     expect(route.visual?.prepare?.toString()).toContain('user.username, user.password');
   });
 
