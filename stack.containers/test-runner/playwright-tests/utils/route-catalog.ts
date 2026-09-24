@@ -383,6 +383,20 @@ export const browserRouteCatalog: BrowserRoute[] = [
         reportStage(`initial-fields-${fieldKind}`);
         // Huly is configured with a Keycloak OpenID client. Authenticate through
         // that supported identity boundary instead of creating local app accounts.
+        const providersUrl = new URL('/_accounts/providers', page.url()).toString();
+        const providersResponse = await page.request.get(providersUrl, { timeout: 5000 }).catch(() => null);
+        const providersStatusKind = providersResponse === null ? 'network-error'
+          : providersResponse.status() >= 500 ? '5xx'
+            : providersResponse.status() >= 400 ? '4xx'
+              : providersResponse.status() >= 200 && providersResponse.status() < 300 ? '2xx' : 'other';
+        reportStage(`accounts-providers-${providersStatusKind}`);
+        if (providersResponse !== null && providersResponse.ok()) {
+          const providersPayload: unknown = await providersResponse.json().catch(() => null);
+          const advertisesOpenId = JSON.stringify(providersPayload).toLowerCase().includes('openid');
+          reportStage(advertisesOpenId ? 'openid-provider-present' : 'openid-provider-absent');
+        } else {
+          reportStage('openid-provider-unavailable');
+        }
         const openidEntry = page.getByRole('button', { name: /open.?id|keycloak|sso/i })
           .or(page.getByRole('link', { name: /open.?id|keycloak|sso/i }))
           .or(page.locator('a[href*="/auth/openid"], a[href*="openid"]'))
