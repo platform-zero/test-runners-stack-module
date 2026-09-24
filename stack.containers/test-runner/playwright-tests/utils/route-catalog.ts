@@ -397,6 +397,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
         } else {
           reportStage('openid-provider-unavailable');
         }
+        let openidCallbackStatus: number | null = null;
+        page.on('response', (response) => {
+          try {
+            const pathname = new URL(response.url()).pathname;
+            if (pathname.endsWith('/auth/openid/callback')) openidCallbackStatus = response.status();
+          } catch {
+            // Ignore malformed/non-HTTP response URLs; never emit a URL or body.
+          }
+        });
         const openidEntry = page.getByRole('button', { name: /open.?id|keycloak|sso/i })
           .or(page.getByRole('link', { name: /open.?id|keycloak|sso/i }))
           .or(page.locator('a[href*="/auth/openid"], a[href*="openid"]'))
@@ -427,6 +436,18 @@ export const browserRouteCatalog: BrowserRoute[] = [
           reportStage(`openid-flow-${kind}`);
           throw error;
         }
+        const callbackStatusKind = openidCallbackStatus === null ? 'unobserved'
+          : openidCallbackStatus >= 500 ? '5xx'
+            : openidCallbackStatus >= 400 ? '4xx'
+              : openidCallbackStatus >= 300 ? '3xx'
+                : openidCallbackStatus >= 200 ? '2xx' : 'other';
+        reportStage(`openid-callback-http-${callbackStatusKind}`);
+        const postAuthUrl = new URL(page.url());
+        const postAuthLocation = defaultIdentityProvider.isAuthUrl(page.url()) ? 'keycloak'
+          : postAuthUrl.pathname.endsWith('/auth/openid/callback') ? 'account-callback'
+            : /\/login(?:\/auth)?\/?$/.test(postAuthUrl.pathname) ? 'app-login'
+              : postAuthUrl.pathname === '/' ? 'app-root' : 'other';
+        reportStage(`post-auth-location-${postAuthLocation}`);
         try {
           await waitForBodyMatch(page, HULY_WORKSPACE_READY,
             'Huly application session should reach its workspace UI after signup/login');
