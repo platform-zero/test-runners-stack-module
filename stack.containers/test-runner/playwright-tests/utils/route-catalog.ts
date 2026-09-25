@@ -383,6 +383,29 @@ export const browserRouteCatalog: BrowserRoute[] = [
         reportStage(`initial-fields-${fieldKind}`);
         // Huly is configured with a Keycloak OpenID client. Authenticate through
         // that supported identity boundary instead of creating local app accounts.
+        const backchannelUrl = 'http://host.containers.internal:25007/realms/webservices/.well-known/openid-configuration';
+        const backchannelResponse = await page.request.get(backchannelUrl, { timeout: 5000 }).catch(() => null);
+        const backchannelStatusKind = backchannelResponse === null ? 'network-error'
+          : backchannelResponse.status() >= 500 ? '5xx'
+            : backchannelResponse.status() >= 400 ? '4xx'
+              : backchannelResponse.status() >= 200 && backchannelResponse.status() < 300 ? '2xx' : 'other';
+        reportStage(`keycloak-backchannel-${backchannelStatusKind}`);
+        if (backchannelResponse !== null && backchannelResponse.ok()) {
+          const metadata: unknown = await backchannelResponse.json().catch(() => null);
+          const endpointUrls = metadata !== null && typeof metadata === 'object'
+            ? ['authorization_endpoint', 'token_endpoint', 'jwks_uri']
+              .map((key) => (metadata as Record<string, unknown>)[key])
+              .filter((value): value is string => typeof value === 'string') : [];
+          const endpointHosts = endpointUrls.map((value) => {
+            try { return new URL(value).hostname; } catch { return ''; }
+          });
+          const hasPublic = endpointHosts.some((host) => host.startsWith('keycloak.'));
+          const hasInternal = endpointHosts.some((host) => host === 'host.containers.internal' || host === 'keycloak');
+          reportStage(`keycloak-metadata-endpoints-${hasPublic && hasInternal ? 'mixed'
+            : hasPublic ? 'public' : hasInternal ? 'private' : 'other'}`);
+        } else {
+          reportStage('keycloak-metadata-endpoints-unavailable');
+        }
         const providersUrl = new URL('/_accounts/providers', page.url()).toString();
         const providersResponse = await page.request.get(providersUrl, { timeout: 5000 }).catch(() => null);
         const providersStatusKind = providersResponse === null ? 'network-error'

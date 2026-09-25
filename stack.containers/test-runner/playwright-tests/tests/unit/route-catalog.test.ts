@@ -95,6 +95,7 @@ describe('route-catalog', () => {
     expect(route.visual?.prepare?.toString()).toContain("clickOIDCButton('OpenID'");
     expect(route.visual?.prepare?.toString()).toContain('openid-flow-${kind}');
     expect(route.visual?.prepare?.toString()).toContain('accounts-providers-${providersStatusKind}');
+    expect(route.visual?.prepare?.toString()).toContain('keycloak-backchannel-${backchannelStatusKind}');
     expect(route.visual?.prepare?.toString()).toContain('openid-callback-http-${callbackStatusKind}');
     expect(route.visual?.prepare?.toString()).toContain('openid-start-http-${startStatusKind}');
     expect(route.visual?.prepare?.toString()).toContain('post-auth-location-${postAuthLocation}');
