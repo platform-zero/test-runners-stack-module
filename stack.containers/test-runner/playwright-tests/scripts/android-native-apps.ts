@@ -378,11 +378,11 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
           await delay(5_000);
           if (/ops, something went wrong/i.test(await app.source())) await app.tapAt(540, 1485);
           await app.expect(/sign in to your account to continue/i, 30_000);
-          await app.typeInput(0, user.username);
+          await app.typeInput(0, user.email);
           await app.typeInput(1, user.password || '');
           await app.back();
           await app.tapAt(540, 1545);
-          await app.expect(/chores|calendar overview|my chores/i, 60_000);
+          await app.expect(/nothing scheduled|create new chore/i, 60_000);
         });
         break;
       case 'element':
