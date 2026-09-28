@@ -1339,8 +1339,8 @@ print_failed_tests() {
 }
 
 wait_android_appium() {
-    local api="$1" attempt
-    for attempt in $(seq 1 240); do
+    local api="$1"
+    for _ in $(seq 1 240); do
         if rootless_podman exec "android-test-runner-api${api}" curl -fsS \
             http://127.0.0.1:4723/status >/dev/null 2>&1; then
             return 0

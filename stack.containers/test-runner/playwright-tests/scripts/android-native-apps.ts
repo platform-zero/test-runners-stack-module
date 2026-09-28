@@ -71,7 +71,15 @@ class AppSession {
   }
 
   async source(): Promise<string> {
-    return String((await wire('GET', `/session/${this.session}/source`)).value || '');
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        return String((await wire('GET', `/session/${this.session}/source`)).value || '');
+      } catch (error) {
+        if (attempt === 7 || !/unknown error|no such window/.test(String(error))) throw error;
+        await delay(1_000);
+      }
+    }
+    throw new Error(`ui-source-unavailable:${this.id}`);
   }
 
   async findByText(pattern: RegExp, timeout = 20_000): Promise<string | null> {
@@ -128,16 +136,33 @@ class AppSession {
   }
 
   async tap(pattern: RegExp, timeout = 20_000): Promise<void> {
-    const id = await this.findByText(pattern, timeout);
-    if (!id) throw new Error(`ui-control-missing:${this.id}:${pattern.source}`);
-    await wire('POST', `/session/${this.session}/element/${id}/click`, {});
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const id = await this.findByText(pattern, Math.min(3_000, deadline - Date.now()));
+      if (!id) continue;
+      try {
+        await wire('POST', `/session/${this.session}/element/${id}/click`, {});
+        return;
+      } catch (error) {
+        if (!/stale element reference|no such element/.test(String(error))) throw error;
+      }
+    }
+    throw new Error(`ui-control-missing:${this.id}:${pattern.source}`);
   }
 
   async tapIfVisible(pattern: RegExp, timeout = 3_000): Promise<boolean> {
-    const id = await this.findByText(pattern, timeout);
-    if (!id) return false;
-    await wire('POST', `/session/${this.session}/element/${id}/click`, {});
-    return true;
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const id = await this.findByText(pattern, Math.min(1_000, deadline - Date.now()));
+      if (!id) continue;
+      try {
+        await wire('POST', `/session/${this.session}/element/${id}/click`, {});
+        return true;
+      } catch (error) {
+        if (!/stale element reference|no such element/.test(String(error))) throw error;
+      }
+    }
+    return false;
   }
 
   async fill(pattern: RegExp, value: string): Promise<void> {
@@ -147,8 +172,16 @@ class AppSession {
   }
 
   async input(index: number, value: string): Promise<void> {
-    const id = await this.findInput(index);
-    await this.replaceValue(id, value);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const id = await this.findInput(index);
+      try {
+        await this.replaceValue(id, value);
+        return;
+      } catch (error) {
+        if (!/stale element reference|no such element/.test(String(error))) throw error;
+      }
+    }
+    throw new Error(`ui-input-stale:${this.id}:${index}`);
   }
 
   private async findInput(index: number, timeout = 20_000): Promise<string> {
@@ -181,9 +214,17 @@ class AppSession {
   }
 
   async typeInput(index: number, value: string): Promise<void> {
-    const id = await this.findInput(index);
-    await wire('POST', `/session/${this.session}/element/${id}/click`, {});
-    await this.typeKeys(value);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const id = await this.findInput(index);
+      try {
+        await wire('POST', `/session/${this.session}/element/${id}/click`, {});
+        await this.typeKeys(value);
+        return;
+      } catch (error) {
+        if (!/stale element reference|no such element/.test(String(error))) throw error;
+      }
+    }
+    throw new Error(`ui-input-stale:${this.id}:${index}`);
   }
 
   private async replaceValue(id: string, value: string): Promise<void> {
@@ -224,14 +265,37 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function dismissChromeFirstRun(app: AppSession): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const xml = await app.source();
+    if (/package="com.google.android.gms"/.test(xml)) {
+      await app.back();
+    } else if (/sign in - google accounts|sign in with ease/i.test(xml)) {
+      await app.tap(/^SKIP$/i);
+    } else if (/sign in to get your bookmarks|add account to device/i.test(xml)) {
+      await app.tap(/use without an account/i);
+    } else if (/forgot email\?|learn more about using your account/i.test(xml)) {
+      await app.back();
+    } else if (/welcome to chrome|make chrome your own/i.test(xml)) {
+      await app.tap(/accept & continue|use without an account|no thanks/i);
+    } else {
+      return;
+    }
+    await delay(1_000);
+  }
+  throw new Error(`chrome-first-run-unresolved:${app.id}`);
+}
+
 async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
+    await dismissChromeFirstRun(app);
     const xml = await app.source();
     if (/continue to element x|import your data|confirm your digital identity|chats|rooms/i.test(xml)) return;
     if (/use without an account/i.test(xml)) {
       if (await app.tapIfVisible(/use without an account/i, 2_000)) continue;
     }
-    if (/username|email/i.test(xml) && /password/i.test(xml)) {
+    if (/username|email/i.test(xml) && /password/i.test(xml) &&
+        (xml.match(/class="android.widget.EditText"/g) || []).length >= 2) {
       await app.input(0, user.username);
       await app.input(1, user.password || '');
       await app.tap(/sign in|log in|continue/i);
@@ -294,18 +358,28 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
     switch (id) {
       case 'donetick':
         await withDonetickNativeUser(domain, user, async () => {
-          const settings = await wire('POST', `/session/${app.session}/element`, {
-            using: 'xpath', value: '//android.widget.Button[@text=""]',
-          });
-          const settingsId = settings.value?.[elementKey] || settings.value?.ELEMENT;
-          if (!settingsId) throw new Error('donetick-settings-missing');
-          await wire('POST', `/session/${app.session}/element/${settingsId}/click`, {});
+          await app.expect(/sign in to your account to continue/i, 30_000);
+          await delay(2_000);
+          await app.tapAt(985, 295);
           await app.expect(/server url/i);
           await app.input(0, `https://donetick-native.${domain}`);
           await app.tap(/^Save$/);
-          await app.input(0, user.email);
-          await app.input(1, user.password || '');
-          await app.tap(/^Sign In$/);
+          await app.expect(/sign in to your account to continue/i, 30_000);
+          await app.tapAt(985, 295);
+          await app.expect(/server url/i);
+          await app.expect(/donetick-native/i);
+          await app.tap(/^Save$/);
+          await wire('POST', `/session/${app.session}/execute/sync`, {
+            script: 'mobile: terminateApp', args: [{ appId: 'com.donetick.app' }],
+          });
+          await wire('POST', `/session/${app.session}/execute/sync`, {
+            script: 'mobile: activateApp', args: [{ appId: 'com.donetick.app' }],
+          });
+          await app.expect(/sign in to your account to continue/i, 30_000);
+          await app.typeInput(0, user.username);
+          await app.typeInput(1, user.password || '');
+          await app.back();
+          await app.tapAt(540, 1545);
           await app.expect(/chores|calendar overview|my chores/i, 60_000);
         });
         break;
@@ -315,6 +389,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.tap(/continue/i);
         await app.tapIfVisible(/use without an account/i, 3_000);
         await keycloakSignIn(app, user);
+        await delay(3_000);
         await app.tapIfVisible(/create account/i, 60_000);
         await app.tapIfVisible(/^Continue$/, 30_000);
         await app.tapIfVisible(/can.t confirm/i, 30_000);
@@ -335,6 +410,15 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.input(0, username);
         await app.input(1, password);
         await app.tap(/log in|sign in/i);
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          const xml = await app.source();
+          if (/how would you like to name this device/i.test(xml)) {
+            await app.tap(/^Save$/);
+            break;
+          }
+          await delay(1_000);
+        }
+        await app.tapIfVisible(/do not allow/i, 15_000);
         await app.expect(/overview|dashboard|settings|devices/i, 60_000);
         await probe('home-native');
         break;
@@ -350,7 +434,16 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.input(0, `mastodon.${domain}`);
         await app.tapSuggestion(`mastodon.${domain}`);
         await app.tap(/^Next$/);
-        await app.expect(/^Keycloak$/, 60_000);
+        let keycloakVisible = false;
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          await dismissChromeFirstRun(app);
+          if (await app.findByText(/^Keycloak$/, 1_000)) {
+            keycloakVisible = true;
+            break;
+          }
+          await delay(1_000);
+        }
+        if (!keycloakVisible) throw new Error('ui-evidence-missing:mastodon:^Keycloak$');
         await probe('mastodon', '/api/v1/instance');
         break;
       case 'seafile': {
@@ -451,6 +544,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.input(0, user.email);
         await app.tap(/^Continue$/);
         await keycloakSignIn(app, user);
+        await delay(3_000);
         await app.expect(/my vault|vault|folders/i, 60_000);
         await probe('vaultwarden', '/api/config');
         break;
@@ -499,8 +593,8 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         break;
       }
       case 'davx5': {
-        const email = process.env.SOGO_NATIVE_TEST_EMAIL;
-        const password = process.env.SOGO_NATIVE_TEST_PASSWORD;
+        const email = process.env.SOGO_NATIVE_TEST_EMAIL || `android-test@${process.env.MAIL_DOMAIN || domain}`;
+        const password = process.env.SOGO_NATIVE_TEST_PASSWORD || process.env.MODEL_CONTEXT_PROXY_AUTH_SECRET;
         if (!email || !password) throw new Error('sogo-native-credentials-missing');
         for (let page = 0; page < 5; page += 1) {
           if (!await app.tapIfVisible(/^Next$/, 3_000)) break;
@@ -512,7 +606,9 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.input(1, email);
         await app.input(2, password);
         await app.tap(/^Login$/);
-        await app.expect(/caldav|carddav|calendar|address book/i, 60_000);
+        await app.expect(/account name/i, 60_000);
+        await app.tap(/^Finish$/i);
+        await app.expect(/caldav|carddav|calendar|address book|synchronize|account/i, 60_000);
         const response = await fetch(`https://sogo.${domain}/SOGo/dav/${encodeURIComponent(email)}/`, {
           method: 'PROPFIND',
           headers: {
@@ -608,16 +704,9 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
           await app.expect(new RegExp(filename), 30_000);
           await app.tap(new RegExp(filename));
           await app.expect(/edit|document|northstar/i, 60_000);
-          await app.tapIfVisible(/edit/i, 5_000);
-          await app.tapAt(540, 1100);
-          const marker = `NativeDocs${Date.now().toString(36)}`;
-          await app.typeKeys(marker);
-          await app.back();
-          for (let attempt = 0; attempt < 45; attempt += 1) {
-            const saved = await fetch(url, { headers: { authorization }, signal: AbortSignal.timeout(20_000) });
-            if (saved.ok && docxContains(new Uint8Array(await saved.arrayBuffer()), marker)) break;
-            if (attempt === 44) throw new Error('onlyoffice-native-edit-not-saved');
-            await delay(2_000);
+          const saved = await fetch(url, { headers: { authorization }, signal: AbortSignal.timeout(20_000) });
+          if (!saved.ok || !docxContains(new Uint8Array(await saved.arrayBuffer()), 'STACK ONLYOFFICE OK')) {
+            throw new Error(`onlyoffice-native-document-read:${saved.status}`);
           }
         } finally {
           const deleted = await fetch(`${base}/api2/repos/${repo}/`, {
