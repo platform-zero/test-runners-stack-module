@@ -53,7 +53,7 @@ test.describe('Visual Smoke', () => {
 
     for (const route of authenticatedRoutes) {
       test(`${route.label} snapshot`, async ({ page }) => {
-        test.setTimeout(120000);
+        test.setTimeout(route.host === 'jupyterhub' ? 720000 : 180000);
         const user = loadTestUser();
         if (route.host === 'qbittorrent') {
           await seedQbittorrentVisualFixture(page);

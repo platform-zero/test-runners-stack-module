@@ -38,6 +38,7 @@
     "@playwright/test": "^1.58.2",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
+    "@types/nodemailer": "8.0.2",
     "@types/pg": "^8.20.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
@@ -48,5 +49,9 @@
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "imapflow": "2.1.0",
+    "nodemailer": "10.0.11"
   }
 }

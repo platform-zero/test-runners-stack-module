@@ -401,6 +401,36 @@ describe('browser-route-driver', () => {
   });
 
   describe('assertSmokeContract', () => {
+    it('uses visible body text instead of hidden DOM text for readiness and disallow checks', async () => {
+      const bodyLocator = createLocator({ visible: true });
+      bodyLocator.innerText = jest.fn(async () => 'Demo Ready');
+      const page = createPage({
+        bodyText: 'Demo Ready Log In',
+        locators: {
+          body: bodyLocator,
+          '#ready': createLocator({ visible: true }),
+        },
+        onGoto: (_url, currentPage) => {
+          currentPage.__setUrl('https://status.datamancy.net/');
+          currentPage.__setBody('Demo Ready Log In');
+        },
+      });
+      const route = createRoute({
+        host: 'status',
+        label: 'Status',
+        kind: 'public',
+        smoke: {
+          path: '/',
+          matcher: /Demo Ready/,
+          selector: '#ready',
+          disallowMatcher: /Log In/,
+        },
+      });
+
+      await expect(assertSmokeContract(page, route, user)).resolves.toBeUndefined();
+      expect(bodyLocator.innerText).toHaveBeenCalled();
+    });
+
     it('validates public smoke routes', async () => {
       const page = createPage({
         locators: {
@@ -634,7 +664,8 @@ describe('browser-route-driver', () => {
 
   describe('captureVisualSnapshot', () => {
     it('reuses the smoke flow and writes a screenshot into the visual output directory', async () => {
-      const screenshotRoot = fs.mkdtempSync('/tmp/webservices-visual-test-');
+      const testRoot = fs.mkdtempSync('/tmp/webservices-visual-test-');
+      const screenshotRoot = path.join(testRoot, 'screenshots');
       const page = createPage({
         locators: {
           '#visual-ready': createLocator({ visible: true }),
@@ -684,7 +715,8 @@ describe('browser-route-driver', () => {
     });
 
     it('recaptures a frame that fails its pixel contract before recording evidence', async () => {
-      const screenshotRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
+      const testRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
+      const screenshotRoot = path.join(testRoot, 'screenshots');
       const page = createPage({
         locators: {
           '#visual-ready': createLocator({ visible: true }),

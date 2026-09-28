@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "[test-runner] command failed at line=%s status=%s\\n" "$LINENO" "$status" >&2; exit "$status"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR_DEFAULT=""
@@ -12,6 +13,9 @@ elif [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/quadlet" ]; then
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../quadlet" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/../../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../../quadlet" ]; then
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/runtime-model.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
@@ -45,8 +49,8 @@ DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
-WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
-WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
+WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/mnt/stack/podman/test-runners/state}"
+WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices-test-runners}"
 DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="$WEBSERVICES_ROOTLESS_USER"
 if [[ "$DEFAULT_TEST_RUNNER_NETWORK_DOMAIN" == webservices-* ]]; then
     DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="${DEFAULT_TEST_RUNNER_NETWORK_DOMAIN#webservices-}"
@@ -148,7 +152,9 @@ print_usage() {
     echo "  ts-mobile         Run all Playwright mobile suites"
     echo "  android-smoke     Cold-boot the API 36 KVM emulator and verify Appium"
     echo "  android-full      Run the Android harness on API 34 and API 36"
-    echo "  mobile-full       Run browser mobile coverage and the Android matrix"
+    echo "  android-apps      Run locked native apps on the API 36 emulator"
+    echo "  android-apps-matrix Run API 34 smoke and native apps on API 36"
+    echo "  mobile-full       Run browser mobile coverage, API 34 smoke, and native apps on API 36"
     echo "  ts-e2e-smoke      Alias for ts-app-smoke"
     echo "  ts-e2e-deep       Run Playwright deep browser flows"
     echo "  ts-workflow       Alias for ts-e2e-deep"
@@ -253,7 +259,7 @@ rootless_user_env() {
 require_webservices_user() {
     if [ "$(id -un)" != "$WEBSERVICES_ROOTLESS_USER" ]; then
         echo -e "${RED}Error:${NC} deployed stack tests must run as $WEBSERVICES_ROOTLESS_USER." >&2
-        echo "Use: ssh webservices-local '$0 <command>'" >&2
+        echo "Use: ssh $WEBSERVICES_ROOTLESS_USER@<host> '$0 <command>'" >&2
         exit 1
     fi
 }
@@ -644,6 +650,10 @@ loopback_endpoint_url() {
     printf 'http://host.containers.internal:%s\n' "$port"
 }
 
+optional_loopback_endpoint_url() {
+    loopback_endpoint_url "$@" 2>/dev/null || true
+}
+
 podman_run_extra_host_args() {
     local env_file="$1"
     local domain
@@ -775,7 +785,7 @@ podman_run_service_env_args() {
     emit_env_arg GRAFANA_URL "$(loopback_endpoint_url grafana 3000)"
     emit_env_arg HOMEASSISTANT_URL "$(loopback_endpoint_url homeassistant 8123)"
     emit_env_arg MASTODON_URL "$(loopback_endpoint_url mastodon-web 3000)"
-    emit_env_arg MASTODON_STREAMING_URL "$(loopback_endpoint_url mastodon-streaming 4000)"
+    emit_env_arg MASTODON_STREAMING_URL "$(optional_loopback_endpoint_url mastodon-streaming 4000)"
     emit_env_arg NTFY_URL "$(loopback_endpoint_url ntfy 80)"
     emit_env_arg ONLYOFFICE_URL "$(loopback_endpoint_url onlyoffice 80)"
     emit_env_arg PLANKA_URL "$(loopback_endpoint_url planka 1337)"
@@ -1328,24 +1338,82 @@ print_failed_tests() {
     awk '/^Test: / {sub(/^Test: /, ""); print}' "$dir/failures.log"
 }
 
+wait_android_appium() {
+    local api="$1" attempt
+    for attempt in $(seq 1 240); do
+        if rootless_podman exec "android-test-runner-api${api}" curl -fsS \
+            http://127.0.0.1:4723/status >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    printf '[android-app] api=%s result=appium-timeout\n' "$api" >&2
+    return 1
+}
+
 run_android_unit() {
-    local unit="webservices-android-test-runner-api${1}.service"
-    local uid runtime
-    uid="$(id -u "$WEBSERVICES_ROOTLESS_USER")"
-    runtime="/run/user/$uid"
-    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
-      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
-      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
-      systemctl --user reset-failed "$unit" || true
-    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
-      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
-      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
-      systemctl --user start --wait "$unit"
+    local api="$1" unit="webservices-android-test-runner-api${1}.service"
+    local status=0
+    android_user_systemctl reset-failed "$unit" || true
+    trap 'stop_android_app_unit "$api"' EXIT INT TERM
+    android_user_systemctl start "$unit" || status=$?
+    if [ "$status" -eq 0 ]; then wait_android_appium "$api" || status=$?; fi
+    stop_android_app_unit "$api"
+    trap - EXIT INT TERM
+    return "$status"
 }
 
 run_android_matrix() {
-    run_android_unit 34
-    run_android_unit 36
+    run_android_app_matrix
+}
+
+stop_android_app_unit() {
+    local unit="webservices-android-test-runner-api${1}.service"
+    android_user_systemctl stop "$unit"
+    android_user_systemctl reset-failed "$unit" || true
+}
+
+android_user_systemctl() {
+    local uid runtime
+    uid="$(id -u "$WEBSERVICES_ROOTLESS_USER")"
+    runtime="/run/user/$uid"
+    if [ "$(id -un)" = "$WEBSERVICES_ROOTLESS_USER" ]; then
+        systemctl --user "$@"
+        return
+    fi
+    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
+      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+      systemctl --user "$@"
+}
+
+run_android_app_unit() {
+    local api="$1" unit="webservices-android-test-runner-api${1}.service"
+    local status=0
+    android_user_systemctl reset-failed "$unit" || true
+    trap 'stop_android_app_unit "$api"' EXIT INT TERM
+    if ! android_user_systemctl start "$unit"; then
+        printf '[android-app] api=%s result=emulator-start-failed\n' "$api"
+        stop_android_app_unit "$api"
+        trap - EXIT INT TERM
+        return 1
+    fi
+    wait_android_appium "$api" || status=$?
+    if [ "$status" -eq 0 ]; then rootless_podman exec "android-test-runner-api${api}" fetch-android-apks || status=$?; fi
+    if [ "$status" -eq 0 ]; then
+        run_runner android-apps "$api" || status=1
+        run_runner android-docs-browser "$api" || status=1
+    fi
+    stop_android_app_unit "$api"
+    trap - EXIT INT TERM
+    return "$status"
+}
+
+run_android_app_matrix() {
+    local failed=0
+    run_android_unit 34 || failed=1
+    run_android_app_unit 36 || failed=1
+    return "$failed"
 }
 
 print_test_catalog() {
@@ -1355,7 +1423,7 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile android-smoke android-full mobile-full ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile android-smoke android-full android-apps android-apps-matrix mobile-full ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
     printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
@@ -1367,7 +1435,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|android-smoke|android-full|mobile-full|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|android-smoke|android-full|android-apps|android-apps-matrix|mobile-full|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -1456,6 +1524,12 @@ case "$COMMAND" in
         ;;
     android-full)
         run_android_matrix
+        ;;
+    android-apps)
+        run_android_app_unit 36
+        ;;
+    android-apps-matrix)
+        run_android_app_matrix
         ;;
     mobile-full)
         run_runner ts-mobile "$@"

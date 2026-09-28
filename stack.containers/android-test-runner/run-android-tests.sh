@@ -17,6 +17,13 @@ if [ "$#" -eq 0 ]; then
     sleep 1
   done
   printf '%s\n' '<testsuite name="android-smoke" tests="1" failures="0"><testcase name="emulator-and-appium-ready"/></testsuite>' >"$artifacts/junit.xml"
+  if [ "${ANDROID_SERVER_MODE:-0}" = 1 ]; then
+    printf '[android-test] api=%s state=ready\n' "${ANDROID_API_LEVEL:-36}"
+    while kill -0 "${APPIUM_PID:?Appium PID is required}" 2>/dev/null; do
+      sleep 5
+    done
+    exit 1
+  fi
   exit 0
 fi
 exec "$@"

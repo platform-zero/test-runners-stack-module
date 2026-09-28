@@ -18,17 +18,24 @@ services:
       ANDROID_ABI: "x86_64"
       ANDROID_DEVICE: "pixel_7"
       ANDROID_ARTIFACT_DIR: "/artifacts"
-      APPIUM_HOST: "127.0.0.1"
+      APPIUM_HOST: "0.0.0.0"
       APPIUM_PORT: "4723"
+      ANDROID_SERVER_MODE: "1"
       DOMAIN: "${DOMAIN}"
     devices:
     - "/dev/kvm:/dev/kvm"
     groupAdd:
     - "keep-groups"
+    networks:
+    - "default"
     volumes:
     - type: "bind"
       source: "/mnt/stack/podman/test-runners/state/test-runner/results"
       target: "/artifacts"
+    - type: "bind"
+      source: "/mnt/stack/volumes/caddy_ca/caddy-ca.crt"
+      target: "/ca/caddy-ca.crt"
+      read_only: true
     tmpfs:
     - "/tmp"
     - "/home/android/.android:rw,size=1g"
@@ -53,17 +60,24 @@ services:
       ANDROID_ABI: "x86_64"
       ANDROID_DEVICE: "pixel_7"
       ANDROID_ARTIFACT_DIR: "/artifacts"
-      APPIUM_HOST: "127.0.0.1"
+      APPIUM_HOST: "0.0.0.0"
       APPIUM_PORT: "4723"
+      ANDROID_SERVER_MODE: "1"
       DOMAIN: "${DOMAIN}"
     devices:
     - "/dev/kvm:/dev/kvm"
     groupAdd:
     - "keep-groups"
+    networks:
+    - "default"
     volumes:
     - type: "bind"
       source: "/mnt/stack/podman/test-runners/state/test-runner/results"
       target: "/artifacts"
+    - type: "bind"
+      source: "/mnt/stack/volumes/caddy_ca/caddy-ca.crt"
+      target: "/ca/caddy-ca.crt"
+      read_only: true
     tmpfs:
     - "/tmp"
     - "/home/android/.android:rw,size=1g"
@@ -95,6 +109,7 @@ services:
       TESTDEV_SKIP_GPU_INGESTION: "${TESTDEV_SKIP_GPU_INGESTION:-0}"
       CADDY_CONTAINER: "${CADDY_CONTAINER:-caddy}"
       DOMAIN: "${DOMAIN}"
+      NODE_EXTRA_CA_CERTS: "/ca/caddy-ca.crt"
       BASE_URL: "https://${DOMAIN}"
       CADDY_URL: "http://host.containers.internal:80"
       IDENTITY_PROVIDER: "${IDENTITY_PROVIDER:-keycloak}"
@@ -156,6 +171,8 @@ services:
       QDRANT_API_KEY: "${QDRANT_ADMIN_API_KEY}"
       NTFY_USERNAME: "${NTFY_USERNAME}"
       NTFY_PASSWORD: "${NTFY_PASSWORD}"
+      SOGO_NATIVE_TEST_EMAIL: "android-test@${MAIL_DOMAIN}"
+      SOGO_NATIVE_TEST_PASSWORD: "${MODEL_CONTEXT_PROXY_AUTH_SECRET}"
       BOOKSTACK_API_TOKEN_ID: "${BOOKSTACK_API_TOKEN_ID}"
       BOOKSTACK_API_TOKEN_SECRET: "${BOOKSTACK_API_TOKEN_SECRET}"
       VAULTWARDEN_ORG_ID: "${VAULTWARDEN_ORG_ID}"
@@ -181,6 +198,7 @@ services:
     - "sogo.${DOMAIN}:host-gateway"
     - "jellyfin.${DOMAIN}:host-gateway"
     - "donetick.${DOMAIN}:host-gateway"
+    - "donetick-native.${DOMAIN}:host-gateway"
     - "erpnext.${DOMAIN}:host-gateway"
     - "seafile.${DOMAIN}:host-gateway"
     - "files-native.${DOMAIN}:host-gateway"
@@ -205,6 +223,7 @@ services:
     - "search.${DOMAIN}:host-gateway"
     - "pipeline.${DOMAIN}:host-gateway"
     - "qbittorrent.${DOMAIN}:host-gateway"
+    - "qbittorrent-native.${DOMAIN}:host-gateway"
     networks:
     - "ai"
     - "caddy"
@@ -236,6 +255,10 @@ services:
     - type: "bind"
       source: "%t/podman/podman.sock"
       target: "/run/podman/podman.sock"
+    - type: "bind"
+      source: "/mnt/stack/volumes/caddy_ca/caddy-ca.crt"
+      target: "/ca/caddy-ca.crt"
+      read_only: true
     restart: "no"
     tmpfs:
     - "/tmp"
@@ -265,6 +288,7 @@ services:
       TESTDEV_SKIP_GPU_INGESTION: "${TESTDEV_SKIP_GPU_INGESTION:-0}"
       CADDY_CONTAINER: "${CADDY_CONTAINER:-caddy}"
       DOMAIN: "${DOMAIN}"
+      NODE_EXTRA_CA_CERTS: "/ca/caddy-ca.crt"
       BASE_URL: "https://${DOMAIN}"
       CADDY_URL: "http://host.containers.internal:80"
       IDENTITY_PROVIDER: "${IDENTITY_PROVIDER:-keycloak}"
@@ -326,6 +350,8 @@ services:
       QDRANT_API_KEY: "${QDRANT_ADMIN_API_KEY}"
       NTFY_USERNAME: "${NTFY_USERNAME}"
       NTFY_PASSWORD: "${NTFY_PASSWORD}"
+      SOGO_NATIVE_TEST_EMAIL: "android-test@${MAIL_DOMAIN}"
+      SOGO_NATIVE_TEST_PASSWORD: "${MODEL_CONTEXT_PROXY_AUTH_SECRET}"
       BOOKSTACK_API_TOKEN_ID: "${BOOKSTACK_API_TOKEN_ID}"
       BOOKSTACK_API_TOKEN_SECRET: "${BOOKSTACK_API_TOKEN_SECRET}"
       VAULTWARDEN_ORG_ID: "${VAULTWARDEN_ORG_ID}"
@@ -351,6 +377,7 @@ services:
     - "sogo.${DOMAIN}:host-gateway"
     - "jellyfin.${DOMAIN}:host-gateway"
     - "donetick.${DOMAIN}:host-gateway"
+    - "donetick-native.${DOMAIN}:host-gateway"
     - "erpnext.${DOMAIN}:host-gateway"
     - "seafile.${DOMAIN}:host-gateway"
     - "files-native.${DOMAIN}:host-gateway"
@@ -375,6 +402,7 @@ services:
     - "search.${DOMAIN}:host-gateway"
     - "pipeline.${DOMAIN}:host-gateway"
     - "qbittorrent.${DOMAIN}:host-gateway"
+    - "qbittorrent-native.${DOMAIN}:host-gateway"
     networks:
     - "ai"
     - "caddy"
@@ -406,6 +434,10 @@ services:
     - type: "bind"
       source: "%t/podman/podman.sock"
       target: "/run/podman/podman.sock"
+    - type: "bind"
+      source: "/mnt/stack/volumes/caddy_ca/caddy-ca.crt"
+      target: "/ca/caddy-ca.crt"
+      read_only: true
     command:
     - "exec /container-entrypoint.sh ${TEST_RUNNER_MANAGED_COMMAND_LINE:-suite stack-contract}"
     entrypoint:

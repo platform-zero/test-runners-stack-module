@@ -364,6 +364,16 @@ case "${1:-suite}" in
         log "Running Playwright mobile suites"
         run_playwright_npm test:e2e:mobile
         ;;
+    android-apps)
+        log "Running native Android app suite for API ${2:-36}"
+        exec_as_test_user node /app/playwright-tests/node_modules/ts-node/dist/bin.js \
+            /app/playwright-tests/scripts/android-native-apps.ts "${2:-36}"
+        ;;
+    android-docs-browser)
+        log "Checking Seafile ONLYOFFICE editor in Android Chrome"
+        exec_as_test_user node /app/playwright-tests/node_modules/ts-node/dist/bin.js \
+            /app/playwright-tests/scripts/android-apps.ts "${2:-36}" --only-docs
+        ;;
     ts-e2e-smoke)
         log "Running Playwright isolated-user app smoke tests"
         run_playwright_npm test:e2e:app-smoke

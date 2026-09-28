@@ -13,6 +13,7 @@ COPY --from=temurin21 /opt/java/openjdk /opt/java/openjdk
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     curl \
+    unzip \
     jq \
     ca-certificates \
     systemd \
@@ -54,6 +55,7 @@ USER root
 
 COPY stack.kotlin/test-runner/build/libs/test-runner-*-all.jar /app/test-runner.jar
 COPY --chown=pwuser:pwuser stack.containers/test-runner/playwright-tests /app/playwright-tests
+COPY --chown=pwuser:pwuser stack.containers/android-test-runner/android-apks.lock.json /app/android-apks.lock.json
 COPY stack.containers/test-runner/fixtures/caddy-hosts.txt /app/repo-fixtures/caddy-hosts.txt
 COPY stack.containers/test-runner/fixtures/agent-build-demo /app/stack.containers/test-runner/fixtures/agent-build-demo
 COPY stack.containers/test-runner/fixtures/agent-lang /app/stack.containers/test-runner/fixtures/agent-lang

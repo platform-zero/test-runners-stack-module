@@ -5,6 +5,22 @@ import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
 
 export type RouteKind = 'public' | 'forward_auth' | 'oidc_login' | 'non_ui' | 'orphaned';
 
+type RouteUser = {
+  username: string;
+  email: string;
+  password?: string;
+  displayName?: string;
+};
+
+async function waitForBodyMatch(page: Page, matcher: RegExp, message: string): Promise<void> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const content = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    if (matcher.test(content)) return;
+    await page.waitForTimeout(500);
+  }
+  throw new Error(message);
+}
+
 export type AnonymousContract =
   | { kind: 'public_page'; matcher: RegExp; path?: string }
   | { kind: 'forward_auth'; path?: string }
@@ -16,7 +32,7 @@ export type AnonymousContract =
 export type SmokeContract = {
   matcher: RegExp;
   path?: string;
-  pathForUser?: (user: { username: string; email: string }) => string;
+  pathForUser?: (user: RouteUser) => string;
   selector?: string;
   loginLabel?: string;
   disallowMatcher?: RegExp;
@@ -24,8 +40,10 @@ export type SmokeContract = {
   headers?: Record<string, string>;
   oidcStartPath?: string;
   oidcStartSuccessUrlMatcher?: RegExp;
-  preAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
-  postAuthenticate?: (page: Page, user: { username: string; email: string }) => Promise<void>;
+  preAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
+  postAuthenticate?: (page: Page, user: RouteUser) => Promise<void>;
+  prepareBeforeSmoke?: boolean;
+  readinessTimeoutMs?: number;
 };
 
 export type VisualContract = SmokeContract & {
@@ -33,7 +51,8 @@ export type VisualContract = SmokeContract & {
   fullPage?: boolean;
   quality?: number;
   maxDarkPixelRatio?: number;
-  prepare?: (page: Page, user: { username: string; email: string }) => Promise<void>;
+  prepare?: (page: Page, user: RouteUser) => Promise<void>;
+  prepareBeforeSmoke?: boolean;
 };
 
 export type BrowserRoute = {
@@ -317,15 +336,64 @@ export const browserRouteCatalog: BrowserRoute[] = [
     anonymous: { kind: 'forward_auth' },
     visual: {
       fileStem: 'huly-authenticated',
-      matcher: /Platform|Sign Up|Log In|Forgot your password|Continue as a guest/i,
-      selector: 'text=/Sign Up|Log In|Continue as a guest/i',
-      disallowMatcher: /Sign in to your account|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
+      matcher: /My Workspaces|Inbox|Projects|Create workspace/i,
+      selector: 'body',
+      prepareBeforeSmoke: true,
+      readinessTimeoutMs: 120000,
+      // Huly keeps generic Sign Up/Log In controls in its application shell;
+      // visual.prepare separately proves that the authenticated workspace is visible.
+      disallowMatcher: /Forgot your password|Continue as a guest|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
-        const credentials = page.getByRole('textbox');
-        await credentials.first().fill(user.email);
-        await credentials.nth(1).fill('visual-review-only');
-        await page.getByText('Required field Email', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
-        await page.getByText('Required field Password', { exact: true }).waitFor({ state: 'hidden', timeout: 5000 });
+        if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
+        // Edge authentication proves the gateway identity, but Huly has a separate
+        // application account. Prefer signing into the existing disposable account;
+        // the shell can show Sign Up even after that account has already been created.
+        const passwordInput = page.locator('input[type="password"]').first();
+        let passwordVisible = await passwordInput.isVisible().catch(() => false);
+        const login = page.getByRole('button', { name: /^Log In$/i }).last();
+        if (!passwordVisible && await login.isVisible().catch(() => false)) {
+          await login.click({ force: true });
+          await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
+          passwordVisible = await passwordInput.isVisible().catch(() => false);
+        }
+
+        if (passwordVisible) {
+          const emailInput = page.locator('input[type="email"]').first();
+          if (await emailInput.isVisible().catch(() => false)) {
+            await emailInput.fill(user.email);
+          } else {
+            await page.getByRole('textbox').first().fill(user.email);
+          }
+          await passwordInput.fill(user.password);
+          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+        } else {
+          // First-run path only: create the disposable application account.
+          const signUp = page.getByText('Sign Up', { exact: true }).first();
+          if (!await signUp.isVisible().catch(() => false)) {
+            throw new Error('Huly did not expose an application login or first-run signup form');
+          }
+          await signUp.click({ force: true });
+          await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
+          const emailInput = page.locator('input[type="email"]').first();
+          if (await emailInput.isVisible().catch(() => false)) {
+            await emailInput.fill(user.email);
+          } else {
+            await page.getByRole('textbox').first().fill(user.email);
+          }
+          const passwordInputs = page.locator('input[type="password"]');
+          const passwordCount = await passwordInputs.count();
+          for (let index = 0; index < passwordCount; index += 1) {
+            await passwordInputs.nth(index).fill(user.password);
+          }
+          const name = page.getByLabel(/name|full name/i).first();
+          if (await name.isVisible().catch(() => false)) {
+            await name.fill(user.displayName || 'Playwright User');
+          }
+          await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
+            .click({ force: true });
+        }
+        await waitForBodyMatch(page, /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
+          'Huly application session should reach its workspace UI after signup/login');
       },
       quality: 85,
       fullPage: false,
@@ -579,10 +647,46 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jupyterhub-authenticated',
       path: '/user-redirect/lab',
-      matcher: /JupyterLab|Launcher|Notebook|Console|Terminal|File Browser/i,
-      selector: '.jp-LabShell, text=/JupyterLab|Launcher|Notebook|Console|Terminal/i',
+      matcher: /JupyterLab|Launcher|Notebook|Console|Terminal|File Browser|Files/i,
+      selector: '.jp-LabShell, text=/JupyterLab|Launcher|Notebook|Console|Terminal|Files/i',
       disallowMatcher: /Start My Server|503 Service Unavailable|Bad Gateway|Unauthorized/i,
+      prepareBeforeSmoke: true,
+      readinessTimeoutMs: 300000,
       prepare: async (page) => {
+        const userServerUrl = /\/user\/[^/]+\/(lab|tree)/;
+
+        if (/\/hub\/(home|login)/.test(page.url())) {
+          await page.goto(serviceUrl('jupyterhub', '/user-redirect/lab'), {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+          }).catch(() => {});
+        }
+
+        const startServer = page.locator(
+          '#start, button:has-text("Start My Server"), a:has-text("Start My Server")'
+        ).first();
+        if (await startServer.isVisible().catch(() => false)) {
+          await startServer.click().catch(() => {});
+          await page.waitForURL((url) =>
+            /\/hub\/spawn-pending\//.test(url.pathname) || userServerUrl.test(url.pathname),
+          { timeout: 30000 }).catch(() => {});
+        }
+
+        if (/\/hub\/home/.test(page.url())) {
+          const myServer = page.locator(
+            'a[href*="/user/"], a:has-text("My Server"), a:has-text("Launch Server")'
+          ).first();
+          if (await myServer.isVisible().catch(() => false)) {
+            await myServer.click().catch(() => {});
+          } else {
+            await page.goto(serviceUrl('jupyterhub', '/user-redirect/lab'), {
+              waitUntil: 'domcontentloaded',
+              timeout: 30000,
+            }).catch(() => {});
+          }
+        }
+
+        await page.waitForURL(userServerUrl, { timeout: 300000 }).catch(() => {});
         const declineNews = page.getByRole('button', { name: /^no$/i }).first();
         if (await declineNews.isVisible().catch(() => false)) {
           await declineNews.evaluate((element) => (element as HTMLElement).click());
@@ -868,6 +972,34 @@ export const browserRouteCatalog: BrowserRoute[] = [
           }
         }
         await page.waitForURL((url) => /keycloak|identity\/connect\/authorize/i.test(url.toString()), { timeout: 20000 }).catch(() => {});
+      },
+      prepare: async (page, user) => {
+        if (!user.password) throw new Error('Vaultwarden visual enrollment requires the generated test password');
+        const passwords = page.locator('input[type="password"]');
+        const passwordCount = await passwords.count();
+        if (passwordCount >= 2) {
+          // A fresh SSO user must finish Vaultwarden's organization enrollment.
+          // Reusing the generated test password leaves a real authenticated vault
+          // session without persisting any fixture secret in the repository.
+          await passwords.nth(0).fill(user.password);
+          await passwords.nth(1).fill(user.password);
+          const submit = page.getByRole('button', { name: /join organization|create account|continue|save|set password/i }).last();
+          if (await submit.isVisible().catch(() => false)) {
+            await submit.click({ force: true });
+          }
+          const addLater = page.getByRole('button', { name: /add it later/i });
+          await addLater.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
+          if (await addLater.isVisible().catch(() => false)) {
+            await addLater.click({ force: true });
+            const skipToWebApp = page.getByText(/skip to web app/i).first();
+            await skipToWebApp.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+            if (await skipToWebApp.isVisible().catch(() => false)) {
+              await skipToWebApp.click({ force: true });
+            }
+          }
+        }
+        await waitForBodyMatch(page, /My Vault|Vaults|Folders|Items|Search vault|No items/i,
+          'Vaultwarden should complete first-user enrollment into the authenticated vault');
       },
       quality: 85,
       fullPage: false,

@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "apps": [
+    {
+      "id": "element",
+      "package": "io.element.android.x",
+      "version": "26.09.1",
+      "versionCode": 202609014,
+      "url": "https://f-droid.org/repo/io.element.android.x_202609014.apk",
+      "sha256": "dd913f14d8e25b980d2a4e8a3735dba997595fbfeb920fc8ca81dd9a154deda5",
+      "signerSha256": "6a2fdc3148049ce0d5c6e85010723b83fb207d20c7477f5c22ac53c877e92d47"
+    },
+    {
+      "id": "homeassistant",
+      "package": "io.homeassistant.companion.android.minimal",
+      "version": "2026.6.5-minimal",
+      "versionCode": 22884,
+      "url": "https://f-droid.org/repo/io.homeassistant.companion.android.minimal_22884.apk",
+      "sha256": "f3ecfcba33d2d7936e7f6d5adde6cdd35b50d19d0af36b1d5b5ed11c9e53a601",
+      "signerSha256": "17485250a03a0f2b3f292a054f595a9e794beef80cf910f7b3bbb8098abf6d50"
+    },
+    {
+      "id": "jellyfin",
+      "package": "org.jellyfin.mobile",
+      "version": "2.7.3",
+      "versionCode": 2070399,
+      "url": "https://f-droid.org/repo/org.jellyfin.mobile_2070399.apk",
+      "sha256": "f9f4b3ab46cc9434df811194c2d4351417f4db83a4c1a0facd0a662d69533f7f",
+      "signerSha256": "d881796ed2a67ff6ef9f676828723c6b1fa18e09388962cba4abc4a594a69131"
+    },
+    {
+      "id": "mastodon",
+      "package": "org.joinmastodon.android",
+      "version": "2.13.3",
+      "versionCode": 190,
+      "url": "https://f-droid.org/repo/org.joinmastodon.android_190.apk",
+      "sha256": "1bb8b9a6dcbd70d07d7373e93ed1b316460ebd1983f554914bafbc523e24ac76",
+      "signerSha256": "83cb2cd2bdd51031044cd276852324b2e96fbe3d87298df7b6794c9dea345504"
+    },
+    {
+      "id": "ntfy",
+      "package": "io.heckel.ntfy",
+      "version": "1.25.2",
+      "versionCode": 63,
+      "url": "https://f-droid.org/repo/io.heckel.ntfy_63.apk",
+      "sha256": "b4baa6f668bd57ad5df3b4e0e769165dcf25c5ee19fdb04f78077ee819616f2a",
+      "signerSha256": "76e94d8e04706c5b99064c23210d8ca9910608abae8f3e972b41e388391646e0"
+    },
+    {
+      "id": "seafile",
+      "package": "com.seafile.seadroid2",
+      "version": "4.0.13",
+      "versionCode": 422,
+      "url": "https://f-droid.org/repo/com.seafile.seadroid2_422.apk",
+      "sha256": "cb302d4c235be9700fe6e52cc71ebefdacca2676f63b053fde4dba3ff3e74761",
+      "signerSha256": "9debb43891c667ead7a999d45abb69afcca9c43a48ceb7f4f4cabbaffb1e48af"
+    },
+    {
+      "id": "gitnex",
+      "package": "org.mian.gitnex",
+      "version": "15.0.0",
+      "versionCode": 1500,
+      "url": "https://f-droid.org/repo/org.mian.gitnex_1500.apk",
+      "sha256": "6166682846bdc973a9bdd0a251a4da640dba6a8e410be87c9fda633ef7c8794f",
+      "signerSha256": "d350accdc3aa4740bef1ded95f6f466982e697d7d390bb7b245b124f52d9ba6b"
+    },
+    {
+      "id": "qbitcontroller",
+      "package": "dev.bartuzen.qbitcontroller",
+      "version": "2.2.1",
+      "versionCode": 29,
+      "url": "https://f-droid.org/repo/dev.bartuzen.qbitcontroller_29.apk",
+      "sha256": "dcef91ba870351ed895d7bf9e7d7bf1a8954b6b7b8d27ad33ec9fd1413b31fdb",
+      "signerSha256": "366038e51ee41078a23a37fd9212238ebad03f1de073e81c738bb6f07b114339"
+    },
+    {
+      "id": "davx5",
+      "package": "at.bitfire.davdroid",
+      "version": "4.5.19-ose",
+      "versionCode": 405190003,
+      "url": "https://f-droid.org/repo/at.bitfire.davdroid_405190003.apk",
+      "sha256": "1efd4d6251d256f95f120d00c48dac741926d7890f76732297622e968396d2c4",
+      "signerSha256": "8b48e676a6864967791783c1d8d0fc0dd6d2ce33e1fb36787793ecd086d44707"
+    },
+    {
+      "id": "thunderbird",
+      "package": "net.thunderbird.android",
+      "version": "23.1",
+      "versionCode": 32,
+      "url": "https://f-droid.org/repo/net.thunderbird.android_32.apk",
+      "sha256": "9f503a2e35d4764b1f614efcb666b07fde8f12b69f42c692e417439a31c5a434",
+      "signerSha256": "b6524779b3dbbc5ac17a5ac271ddb29dcfbf723578c238e03c3c217811356dd1"
+    },
+    {
+      "id": "donetick",
+      "package": "com.donetick.app",
+      "version": "1.2.0",
+      "versionCode": 22,
+      "url": "https://github.com/donetick/donetick/releases/download/v0.1.74/app-release.apk",
+      "sha256": "05bd4c66650858d3f3bf4d370aaaccd872cfd85b41acaddb3e43d9214db5c920",
+      "signerSha256": "ef452740a2d211e427ab9a7ac6e13bcad4de6a0ac3810558d889f1fa4ecb44f3"
+    },
+    {
+      "id": "bitwarden",
+      "package": "com.x8bit.bitwarden",
+      "version": "2026.9.0",
+      "url": "https://github.com/bitwarden/android/releases/download/v2026.9.0-bwpm/com.x8bit.bitwarden-fdroid.apk",
+      "sha256": "981939c676baf7cb0f0ddd2142794749e5b885bac2c06529f4ef21fb8b925112",
+      "signerSha256": "de6ec91431557995297bf3e65bc80349bc603a04708160618c86bc9994171c90",
+      "versionCode": 21909
+    },
+    {
+      "id": "onlyoffice",
+      "package": "com.onlyoffice.documents",
+      "version": "9.4.1",
+      "versionCode": 731,
+      "url": "https://download.onlyoffice.com/install/mobile/android/onlyoffice-documents.apk",
+      "sha256": "86389cd40abe2e10b9348e8f0b9b14f602d03a3f01fba8965390b7500c12c42f",
+      "signerSha256": "e1a8b93da6bde852a2f6f5a5e67c0410c84fe1d2a2f20b42d3bb5c3639df9dc2"
+    }
+  ]
+}
