@@ -3,16 +3,7 @@ const fs = require('node:fs');
 
 const domain = process.env.DOMAIN;
 if (!domain) throw new Error('DOMAIN is required for Android DNS proxy');
-const hostGateway = fs.readFileSync('/etc/hosts', 'utf8').split('\n')
-  .map((line) => line.trim().split(/\s+/))
-  .find((fields) => fields.includes('host.containers.internal'))?.[0];
-if (!hostGateway || !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(hostGateway)) {
-  throw new Error('Podman host gateway is required for native Android routing');
-}
-const localHosts = new Map([
-  [`mail.${domain}`.toLowerCase(), [10, 0, 2, 2]],
-  [`donetick-native.${domain}`.toLowerCase(), hostGateway.split('.').map(Number)],
-]);
+const localHosts = new Map([[`mail.${domain}`.toLowerCase(), [10, 0, 2, 2]]]);
 const upstream = fs.readFileSync('/etc/resolv.conf', 'utf8')
   .match(/^nameserver\s+([^\s]+)$/m)?.[1];
 if (!upstream) throw new Error('No upstream DNS server');

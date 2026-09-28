@@ -375,6 +375,8 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
           await wire('POST', `/session/${app.session}/execute/sync`, {
             script: 'mobile: activateApp', args: [{ appId: 'com.donetick.app' }],
           });
+          await delay(5_000);
+          if (/ops, something went wrong/i.test(await app.source())) await app.tapAt(540, 1485);
           await app.expect(/sign in to your account to continue/i, 30_000);
           await app.typeInput(0, user.username);
           await app.typeInput(1, user.password || '');
