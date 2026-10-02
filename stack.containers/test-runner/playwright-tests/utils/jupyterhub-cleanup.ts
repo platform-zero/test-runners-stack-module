@@ -1,5 +1,7 @@
 import { execFileSync } from 'child_process';
 import { mkdirSync } from 'fs';
+import type { Page } from '@playwright/test';
+import { serviceUrl } from './stack-urls';
 
 type JupyterContainer = {
   name: string;
@@ -83,4 +85,33 @@ export function removeJupyterContainersForUsers(usernames: string[]): string[] {
     console.warn(`⚠️  Failed to remove Jupyter containers ${matchingContainers.join(', ')}: ${message}`);
     return [];
   }
+}
+
+export async function stopJupyterServerForUser(page: Page, username: string): Promise<boolean> {
+  const stopUrl = serviceUrl(
+    'jupyterhub',
+    `/hub/api/users/${encodeURIComponent(username)}/server`
+  );
+  const xsrfCookie = (await page.context().cookies(stopUrl))
+    .find((cookie) => cookie.name === '_xsrf');
+  const headers: Record<string, string> = { Referer: page.url() };
+  if (xsrfCookie?.value) {
+    headers['X-XSRFToken'] = decodeURIComponent(xsrfCookie.value);
+  }
+
+  const response = await page.request.delete(stopUrl, { headers }).catch(() => null);
+  if (!response) {
+    console.warn(`⚠️  Could not request Jupyter server cleanup for ${username}`);
+    return false;
+  }
+  if (![202, 204, 404].includes(response.status())) {
+    const body = await response.text().catch(() => '');
+    console.warn(
+      `⚠️  Jupyter server cleanup returned ${response.status()} for ${username}: ${body.slice(0, 300)}`
+    );
+    return false;
+  }
+
+  console.log(`🧹 Requested Jupyter server cleanup for ${username}`);
+  return true;
 }

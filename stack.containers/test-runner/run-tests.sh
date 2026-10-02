@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -euo pipefail
+set -Eeuo pipefail
+trap 'status=$?; printf "[test-runner] command failed at line=%s status=%s\\n" "$LINENO" "$status" >&2; exit "$status"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR_DEFAULT=""
@@ -12,6 +13,9 @@ elif [ -f "$SCRIPT_DIR/bundle.json" ] && [ -d "$SCRIPT_DIR/quadlet" ]; then
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../quadlet" ]; then
     PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+    DIST_DIR_DEFAULT="$PROJECT_ROOT"
+elif [ -f "$SCRIPT_DIR/../../../bundle.json" ] && [ -d "$SCRIPT_DIR/../../../quadlet" ]; then
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
     DIST_DIR_DEFAULT="$PROJECT_ROOT"
 elif [ -f "$SCRIPT_DIR/runtime-model.yml" ] && [ -d "$SCRIPT_DIR/runtime" ]; then
     PROJECT_ROOT="$SCRIPT_DIR"
@@ -45,14 +49,19 @@ DEFAULT_KT_SUITE="${DEFAULT_KT_SUITE:-stack-contract}"
 DEFAULT_RUNTIME_PROJECT_NAME="${DEFAULT_RUNTIME_PROJECT_NAME:-webservices}"
 TEST_RESULTS_HOST_DIR_OVERRIDE="${TEST_RESULTS_HOST_DIR:-}"
 WEBSERVICES_STATE_ROOT="${WEBSERVICES_STATE_ROOT:-/var/lib/webservices}"
-WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/var/lib/webservices-rootless}"
-WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices}"
-TEST_RUNNER_NETWORK_DOMAIN="${TEST_RUNNER_NETWORK_DOMAIN:-webservices}"
+WEBSERVICES_ROOTLESS_STATE_ROOT="${WEBSERVICES_ROOTLESS_STATE_ROOT:-/mnt/stack/podman/test-runners/state}"
+WEBSERVICES_ROOTLESS_USER="${WEBSERVICES_ROOTLESS_USER:-webservices-test-runners}"
+DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="$WEBSERVICES_ROOTLESS_USER"
+if [[ "$DEFAULT_TEST_RUNNER_NETWORK_DOMAIN" == webservices-* ]]; then
+    DEFAULT_TEST_RUNNER_NETWORK_DOMAIN="${DEFAULT_TEST_RUNNER_NETWORK_DOMAIN#webservices-}"
+fi
+TEST_RUNNER_NETWORK_DOMAIN="${TEST_RUNNER_NETWORK_DOMAIN:-$DEFAULT_TEST_RUNNER_NETWORK_DOMAIN}"
 TEST_RUNNER_MANAGED_SOCKET_USER="${TEST_RUNNER_MANAGED_SOCKET_USER:-$WEBSERVICES_ROOTLESS_USER}"
 TEST_RUNNER_STATE_ROOT="${TEST_RUNNER_STATE_ROOT:-$WEBSERVICES_ROOTLESS_STATE_ROOT/test-runner}"
 CADDY_CA_HOST_PATH="${CADDY_CA_HOST_PATH:-/mnt/stack/volumes/caddy_ca/caddy-ca.crt}"
 export RUNTIME_PROJECT_NAME="${RUNTIME_PROJECT_NAME:-$DEFAULT_RUNTIME_PROJECT_NAME}"
 TEST_RUNNER_CONTAINER_CLI="${TEST_RUNNER_CONTAINER_CLI:-podman}"
+TEST_RUNNER_NETWORK_MODE="${TEST_RUNNER_NETWORK_MODE:-isolated}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -141,6 +150,11 @@ print_usage() {
     echo "  ts-mobile-smoke   Run Playwright mobile authenticated smoke tests"
     echo "  ts-mobile-auth    Run Playwright mobile auth/cookie regression tests"
     echo "  ts-mobile         Run all Playwright mobile suites"
+    echo "  android-smoke     Cold-boot the API 36 KVM emulator and verify Appium"
+    echo "  android-full      Run the Android harness on API 34 and API 36"
+    echo "  android-apps      Run locked native apps on the API 36 emulator"
+    echo "  android-apps-matrix Run API 34 smoke and native apps on API 36"
+    echo "  mobile-full       Run browser mobile coverage, API 34 smoke, and native apps on API 36"
     echo "  ts-e2e-smoke      Alias for ts-app-smoke"
     echo "  ts-e2e-deep       Run Playwright deep browser flows"
     echo "  ts-workflow       Alias for ts-e2e-deep"
@@ -245,7 +259,7 @@ rootless_user_env() {
 require_webservices_user() {
     if [ "$(id -un)" != "$WEBSERVICES_ROOTLESS_USER" ]; then
         echo -e "${RED}Error:${NC} deployed stack tests must run as $WEBSERVICES_ROOTLESS_USER." >&2
-        echo "Use: ssh webservices-local '$0 <command>'" >&2
+        echo "Use: ssh $WEBSERVICES_ROOTLESS_USER@<host> '$0 <command>'" >&2
         exit 1
     fi
 }
@@ -597,6 +611,12 @@ caddy_ca_mount_args() {
 }
 
 podman_run_network_args() {
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        printf '%s\n' "--network"
+        printf '%s\n' "host"
+        return 0
+    fi
+
     local network
     while IFS= read -r network; do
         [ -n "$network" ] || continue
@@ -619,6 +639,21 @@ emit_env_arg() {
     printf '%s\n' "$key=$value"
 }
 
+loopback_endpoint_url() {
+    local service="$1"
+    local container_port="$2"
+    local release port
+    release="$(rootless_release_dir)"
+    port="$(jq -er --arg service "$service" --arg port "$container_port" \
+        '.endpoints[] | select(.service == $service and (.containerPort | tostring) == $port) | .hostPort' \
+        "$release/podman-loopback-endpoints.json")"
+    printf 'http://host.containers.internal:%s\n' "$port"
+}
+
+optional_loopback_endpoint_url() {
+    loopback_endpoint_url "$@" 2>/dev/null || true
+}
+
 podman_run_extra_host_args() {
     local env_file="$1"
     local domain
@@ -637,7 +672,6 @@ podman_run_extra_host_args() {
         "alerts.$domain" \
         "grafana.$domain" \
         "vaultwarden.$domain" \
-        "api.vaultwarden.$domain" \
         "planka.$domain" \
         "bookstack.$domain" \
         "api.bookstack.$domain" \
@@ -646,29 +680,32 @@ podman_run_extra_host_args() {
         "donetick.$domain" \
         "erpnext.$domain" \
         "seafile.$domain" \
-        "api.seafile.$domain" \
+        "files-native.$domain" \
         "onlyoffice.$domain" \
         "matrix.$domain" \
         "api.matrix.$domain" \
         "matrix-rtc.$domain" \
         "element.$domain" \
-        "api.element.$domain" \
         "forgejo.$domain" \
         "git.$domain" \
         "homeassistant.$domain" \
-        "api.homeassistant.$domain" \
+        "home-native.$domain" \
         "jupyterhub.$domain" \
         "mail.$domain" \
         "huly.$domain" \
         "portal.$domain" \
         "mastodon.$domain" \
-        "api.mastodon.$domain" \
         "ntfy.$domain" \
+        "ntfy-native.$domain" \
         "opensearch.$domain" \
         "qbittorrent.$domain" \
         "www.$domain"; do
         printf '%s\n' "--add-host"
-        printf '%s\n' "$host:host-gateway"
+        if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+            printf '%s\n' "$host:127.0.0.1"
+        else
+            printf '%s\n' "$host:host-gateway"
+        fi
     done
 }
 
@@ -680,7 +717,13 @@ podman_run_service_env_args() {
     emit_env_arg DOMAIN "$domain"
     [ -n "$domain" ] && emit_env_arg BASE_URL "https://$domain"
     [ -n "$domain" ] && emit_env_arg KEYCLOAK_URL "https://keycloak.$domain"
-    emit_env_arg KEYCLOAK_INTERNAL_URL "http://keycloak:8080"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        emit_env_arg KEYCLOAK_INTERNAL_URL "https://keycloak.$domain"
+        emit_env_arg KEYCLOAK_AUTH_GATEWAY_URL "https://keycloak-auth.$domain"
+    else
+        emit_env_arg KEYCLOAK_INTERNAL_URL "$(loopback_endpoint_url keycloak 8080)"
+        emit_env_arg KEYCLOAK_AUTH_GATEWAY_URL "$(loopback_endpoint_url keycloak-auth-gateway 4180)"
+    fi
     emit_env_arg KEYCLOAK_REALM "webservices"
     emit_env_arg KEYCLOAK_ADMIN_USER "admin"
     emit_env_arg KEYCLOAK_ADMIN_PASSWORD "$(env_file_value "$env_file" KEYCLOAK_ADMIN_PASSWORD)"
@@ -690,7 +733,7 @@ podman_run_service_env_args() {
     emit_env_arg MODEL_CONTEXT_OIDC_REDIRECT_URI "http://test-runner-managed/callback"
     emit_env_arg MODEL_CONTEXT_OIDC_SCOPE "openid profile email groups"
     emit_env_arg MODEL_CONTEXT_PROXY_AUTH_SECRET "$(env_file_value "$env_file" MODEL_CONTEXT_PROXY_AUTH_SECRET)"
-    emit_env_arg OPENSEARCH_URL "http://opensearch:9200"
+    emit_env_arg OPENSEARCH_URL "$(loopback_endpoint_url opensearch 9200)"
     emit_env_arg OPENSEARCH_USERNAME "admin"
     emit_env_arg OPENSEARCH_ADMIN_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
     emit_env_arg OPENSEARCH_PASSWORD "$(env_file_value "$env_file" OPENSEARCH_ADMIN_PASSWORD)"
@@ -698,19 +741,20 @@ podman_run_service_env_args() {
     emit_env_arg STACK_ADMIN_USER "$(env_file_value "$env_file" STACK_ADMIN_USER)"
     emit_env_arg STACK_ADMIN_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg STACK_ADMIN_EMAIL "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
-    emit_env_arg POSTGRES_HOST "postgres-ssd"
-    emit_env_arg POSTGRES_PORT "5432"
+    emit_env_arg POSTGRES_HOST "host.containers.internal"
+    emit_env_arg POSTGRES_PORT "$(loopback_endpoint_url postgres-ssd 5432 | sed 's/.*://')"
     emit_env_arg POSTGRES_DB "webservices"
     emit_env_arg POSTGRES_USER "test_runner_user"
     emit_env_arg POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_TEST_RUNNER_PASSWORD)"
-    emit_env_arg MATRIX_POSTGRES_HOST "postgres"
-    emit_env_arg MATRIX_POSTGRES_PORT "5432"
+    emit_env_arg MATRIX_POSTGRES_HOST "host.containers.internal"
+    emit_env_arg MATRIX_POSTGRES_PORT "$(loopback_endpoint_url postgres 5432 | sed 's/.*://')"
     emit_env_arg MATRIX_POSTGRES_DB "synapse"
     emit_env_arg MATRIX_POSTGRES_USER "synapse"
     emit_env_arg MATRIX_POSTGRES_PASSWORD "$(env_file_value "$env_file" POSTGRES_SYNAPSE_PASSWORD)"
     emit_env_arg SYNAPSE_REGISTRATION_SECRET "$(env_file_value "$env_file" SYNAPSE_REGISTRATION_SECRET)"
     emit_env_arg LIVEKIT_API_KEY "$(env_file_value "$env_file" LIVEKIT_API_KEY)"
     emit_env_arg LIVEKIT_API_SECRET "$(env_file_value "$env_file" LIVEKIT_API_SECRET)"
+    emit_env_arg LIVEKIT_INTERNAL_API_URL "http://host.containers.internal:7880"
     emit_env_arg SEAFILE_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_EMAIL)"
     emit_env_arg SEAFILE_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg FORGEJO_USERNAME "$(env_file_value "$env_file" STACK_ADMIN_USER)"
@@ -720,12 +764,14 @@ podman_run_service_env_args() {
     emit_env_arg MASTODON_PASSWORD "$(env_file_value "$env_file" STACK_ADMIN_PASSWORD)"
     emit_env_arg MASTODON_API_TOKEN "$(env_file_value "$env_file" MASTODON_API_TOKEN)"
     [ -n "$domain" ] && emit_env_arg MASTODON_HOST_HEADER "mastodon.$domain"
-    emit_env_arg MARIADB_HOST "mariadb"
-    emit_env_arg MARIADB_PORT "3306"
+    emit_env_arg MARIADB_HOST "host.containers.internal"
+    emit_env_arg MARIADB_PORT "$(loopback_endpoint_url mariadb 3306 | sed 's/.*://')"
     emit_env_arg MARIADB_USER "bookstack"
     emit_env_arg MARIADB_PASSWORD "$(env_file_value "$env_file" MARIADB_BOOKSTACK_PASSWORD)"
     emit_env_arg VALKEY_ADMIN_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
     emit_env_arg VALKEY_PASSWORD "$(env_file_value "$env_file" VALKEY_ADMIN_PASSWORD)"
+    emit_env_arg VALKEY_URL "$(loopback_endpoint_url valkey 6379 | sed 's#^http://##')"
+    emit_env_arg MEMCACHED_URL "$(loopback_endpoint_url memcached 11211 | sed 's#^http://##')"
     emit_env_arg QDRANT_API_KEY "$(env_file_value "$env_file" QDRANT_ADMIN_API_KEY)"
     emit_env_arg NTFY_USERNAME "$(env_file_value "$env_file" NTFY_USERNAME)"
     emit_env_arg NTFY_PASSWORD "$(env_file_value "$env_file" NTFY_PASSWORD)"
@@ -733,6 +779,28 @@ podman_run_service_env_args() {
     emit_env_arg BOOKSTACK_API_TOKEN_SECRET "$(env_file_value "$env_file" BOOKSTACK_API_TOKEN_SECRET)"
     emit_env_arg VAULTWARDEN_ORG_ID "$(env_file_value "$env_file" VAULTWARDEN_ORG_ID)"
     emit_env_arg VAULTWARDEN_ORG_IDENTIFIER "$(env_file_value "$env_file" VAULTWARDEN_ORG_IDENTIFIER)"
+    emit_env_arg BOOKSTACK_URL "$(loopback_endpoint_url bookstack 80)"
+    emit_env_arg ELEMENT_URL "$(loopback_endpoint_url element 80)"
+    emit_env_arg FORGEJO_URL "$(loopback_endpoint_url forgejo 3000)"
+    emit_env_arg GRAFANA_URL "$(loopback_endpoint_url grafana 3000)"
+    emit_env_arg HOMEASSISTANT_URL "$(loopback_endpoint_url homeassistant 8123)"
+    emit_env_arg MASTODON_URL "$(loopback_endpoint_url mastodon-web 3000)"
+    emit_env_arg MASTODON_STREAMING_URL "$(optional_loopback_endpoint_url mastodon-streaming 4000)"
+    emit_env_arg NTFY_URL "$(loopback_endpoint_url ntfy 80)"
+    emit_env_arg ONLYOFFICE_URL "$(loopback_endpoint_url onlyoffice 80)"
+    emit_env_arg PLANKA_URL "$(loopback_endpoint_url planka 1337)"
+    emit_env_arg PORTAL_URL "$(loopback_endpoint_url portal 3000)"
+    emit_env_arg ALERTMANAGER_URL "$(loopback_endpoint_url alertmanager 9093)"
+    emit_env_arg HOMEPAGE_URL "$(loopback_endpoint_url portal 3000)"
+    emit_env_arg PROMETHEUS_URL "$(loopback_endpoint_url prometheus 9090)"
+    emit_env_arg QBITTORRENT_URL "$(loopback_endpoint_url qbittorrent 8080)"
+    emit_env_arg SEAFILE_URL "$(loopback_endpoint_url seafile 80)"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        emit_env_arg SYNAPSE_URL "https://matrix.$domain"
+    else
+        emit_env_arg SYNAPSE_URL "$(loopback_endpoint_url synapse 8008)"
+    fi
+    emit_env_arg VAULTWARDEN_URL "$(loopback_endpoint_url vaultwarden 80)"
 }
 
 podman_run_env_args() {
@@ -753,7 +821,11 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "CONTAINER_HOST=$(managed_container_host)"
     printf '%s\n' "-e"
-    printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
+    if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+        printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-127.0.0.1}"
+    else
+        printf '%s\n' "PLAYWRIGHT_ORIGIN_BYPASS_HOST=${PLAYWRIGHT_ORIGIN_BYPASS_HOST:-169.254.1.2}"
+    fi
     printf '%s\n' "-e"
     printf '%s\n' "CADDY_URL=${CADDY_URL:-http://host.containers.internal:80}"
     if [ -n "$(env_file_value "$env_file" DOMAIN)" ]; then
@@ -769,6 +841,8 @@ podman_run_env_args() {
     podman_run_service_env_args "$env_file"
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line"
+    printf '%s\n' "-e"
+    printf '%s\n' "TEST_RUNNER_NETWORK_MODE=$TEST_RUNNER_NETWORK_MODE"
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_COMPONENTS_LOCK_HOST_FILE=$components_lock_file"
     printf '%s\n' "-e"
@@ -787,7 +861,14 @@ podman_run_passthrough_env_args() {
 
 run_podman_test_container() {
     ensure_podman_release_artifacts
-    require_rootless_networks
+    case "$TEST_RUNNER_NETWORK_MODE" in
+        isolated) require_rootless_networks ;;
+        host) ;;
+        *)
+            echo -e "${RED}Error:${NC} TEST_RUNNER_NETWORK_MODE must be isolated or host" >&2
+            exit 1
+            ;;
+    esac
     local results_root="$1"
     local command_line="$2"
     shift 2
@@ -808,7 +889,11 @@ run_podman_test_container() {
         fi
         printf '%s\n' "--init"
         printf '%s\n' "--add-host"
-        printf '%s\n' "host.containers.internal:host-gateway"
+        if [ "$TEST_RUNNER_NETWORK_MODE" = "host" ]; then
+            printf '%s\n' "host.containers.internal:127.0.0.1"
+        else
+            printf '%s\n' "host.containers.internal:host-gateway"
+        fi
         podman_run_extra_host_args "$env_file"
         podman_run_network_args
         podman_run_env_args "$command_line" "$rootless_release" "$components_lock_file" "$env_file"
@@ -940,12 +1025,13 @@ run_runner() {
 
 run_all_tests() {
     local failed=0
-    local step_name step_command command_status
+    local step_name step_command command_status previous_network_mode
     local summary_file results_root
     local -a step_commands=(
         "kt-full|suite stack-full"
         "ts-unit|ts-unit"
         "ts-e2e-all|ts-e2e-all"
+        "ts-e2e-rtc|ts-e2e-name Element Call MatrixRTC"
     )
 
     results_root="$(resolve_test_results_host_dir)"
@@ -972,6 +1058,15 @@ run_all_tests() {
             run_source_unit_tests
             command_status=$?
             set -e
+        elif [ "$step_name" = "ts-e2e-rtc" ]; then
+            previous_network_mode="$TEST_RUNNER_NETWORK_MODE"
+            TEST_RUNNER_NETWORK_MODE=host
+            if run_runner_no_build "${step_args[@]}"; then
+                command_status=0
+            else
+                command_status=$?
+            fi
+            TEST_RUNNER_NETWORK_MODE="$previous_network_mode"
         elif run_runner_no_build "${step_args[@]}"; then
             command_status=0
         else
@@ -1069,7 +1164,7 @@ EOF_PLAN
                 echo "  $index. source-unit"
                 index=$((index + 1))
             fi
-            for item in kt-full ts-unit ts-e2e-all; do
+            for item in kt-full ts-unit ts-e2e-all ts-e2e-rtc; do
                 echo "  $index. $item"
                 index=$((index + 1))
             done
@@ -1243,6 +1338,84 @@ print_failed_tests() {
     awk '/^Test: / {sub(/^Test: /, ""); print}' "$dir/failures.log"
 }
 
+wait_android_appium() {
+    local api="$1"
+    for _ in $(seq 1 240); do
+        if rootless_podman exec "android-test-runner-api${api}" curl -fsS \
+            http://127.0.0.1:4723/status >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    printf '[android-app] api=%s result=appium-timeout\n' "$api" >&2
+    return 1
+}
+
+run_android_unit() {
+    local api="$1" unit="webservices-android-test-runner-api${1}.service"
+    local status=0
+    android_user_systemctl reset-failed "$unit" || true
+    trap 'stop_android_app_unit "$api"' EXIT INT TERM
+    android_user_systemctl start "$unit" || status=$?
+    if [ "$status" -eq 0 ]; then wait_android_appium "$api" || status=$?; fi
+    stop_android_app_unit "$api"
+    trap - EXIT INT TERM
+    return "$status"
+}
+
+run_android_matrix() {
+    run_android_app_matrix
+}
+
+stop_android_app_unit() {
+    local unit="webservices-android-test-runner-api${1}.service"
+    android_user_systemctl stop "$unit"
+    android_user_systemctl reset-failed "$unit" || true
+}
+
+android_user_systemctl() {
+    local uid runtime
+    uid="$(id -u "$WEBSERVICES_ROOTLESS_USER")"
+    runtime="/run/user/$uid"
+    if [ "$(id -un)" = "$WEBSERVICES_ROOTLESS_USER" ]; then
+        systemctl --user "$@"
+        return
+    fi
+    runuser -u "$WEBSERVICES_ROOTLESS_USER" -- env \
+      HOME="$(rootless_home)" XDG_RUNTIME_DIR="$runtime" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+      systemctl --user "$@"
+}
+
+run_android_app_unit() {
+    local api="$1" unit="webservices-android-test-runner-api${1}.service"
+    local status=0
+    android_user_systemctl reset-failed "$unit" || true
+    trap 'stop_android_app_unit "$api"' EXIT INT TERM
+    if ! android_user_systemctl start "$unit"; then
+        printf '[android-app] api=%s result=emulator-start-failed\n' "$api"
+        stop_android_app_unit "$api"
+        trap - EXIT INT TERM
+        return 1
+    fi
+    wait_android_appium "$api" || status=$?
+    if [ "$status" -eq 0 ]; then rootless_podman exec "android-test-runner-api${api}" fetch-android-apks || status=$?; fi
+    if [ "$status" -eq 0 ]; then
+        run_runner android-apps "$api" || status=1
+        run_runner android-docs-browser "$api" || status=1
+    fi
+    stop_android_app_unit "$api"
+    trap - EXIT INT TERM
+    return "$status"
+}
+
+run_android_app_matrix() {
+    local failed=0
+    run_android_unit 34 || failed=1
+    run_android_app_unit 36 || failed=1
+    return "$failed"
+}
+
 print_test_catalog() {
     print_test_plan all
     echo ""
@@ -1250,7 +1423,7 @@ print_test_catalog() {
     printf '%s\n' all default
     echo ""
     echo "Targets:"
-    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
+    printf '%s\n' source-unit doctor kt-core kt-auth kt-apps kt-contract kt-live-ingestion kt-recovery kt-full ts-unit ts-boundary ts-app-smoke ts-sso ts-mobile-smoke ts-mobile-auth ts-mobile android-smoke android-full android-apps android-apps-matrix mobile-full ts-e2e ts-e2e-deep ts-e2e-visual ts-e2e-all
     echo ""
     echo "Kotlin suites:"
     printf '%s\n' stack-core stack-auth stack-apps stack-contract stack-live-ingestion stack-recovery stack-full kotlin-all
@@ -1262,7 +1435,7 @@ print_test_catalog() {
 COMMAND="${1:-kt}"
 shift || true
 
-if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
+if [[ ! "$COMMAND" =~ ^(kt|run|kt-list|kt-tests|kt-plan|kt-one|kt-core|kt-auth|kt-apps|kt-contract|kt-live-ingestion|kt-recovery|kt-full|ts|ts-unit|ts-unit-one|ts-unit-name|ts-boundary|ts-app-smoke|ts-sso|ts-mobile-smoke|ts-mobile-auth|ts-mobile|android-smoke|android-full|android-apps|android-apps-matrix|mobile-full|ts-e2e|ts-e2e-route|ts-e2e-smoke|ts-e2e-deep|ts-workflow|ts-e2e-visual|ts-e2e-all|ts-e2e-one|ts-e2e-name|ts-ui|ts-headed|ts-debug|ts-report|source-unit|gradle-one|list|plan|run-target|changed|slowest|failed|doctor|all|shell|--help|-h|help)$ ]]; then
     set -- "$COMMAND" "$@"
     COMMAND="kt"
 fi
@@ -1345,6 +1518,22 @@ case "$COMMAND" in
         ;;
     ts-mobile)
         run_runner ts-mobile "$@"
+        ;;
+    android-smoke)
+        run_android_unit 36
+        ;;
+    android-full)
+        run_android_matrix
+        ;;
+    android-apps)
+        run_android_app_unit 36
+        ;;
+    android-apps-matrix)
+        run_android_app_matrix
+        ;;
+    mobile-full)
+        run_runner ts-mobile "$@"
+        run_android_matrix
         ;;
     ts-e2e-smoke)
         run_runner ts-app-smoke "$@"

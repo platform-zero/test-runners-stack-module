@@ -9,32 +9,32 @@ function assertNoBrowserSsoRedirect(location: string | null): void {
 
 test.describe('Non-browser API endpoints', () => {
   test('Element bootstrap endpoint stays app-facing', async ({ request }) => {
-    const response = await request.get(serviceUrl('api.element', '/config.json'), { maxRedirects: 0 });
+    const response = await request.get(serviceUrl('element', '/config.json'), { maxRedirects: 0 });
     expect(response.status()).toBe(200);
     const body = await response.json();
     expect(body).toHaveProperty('default_server_config');
   });
 
   test('Seafile API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('api.seafile', '/api2/ping/'), { maxRedirects: 0 });
+    const response = await request.get(serviceUrl('files-native', '/api2/ping/'), { maxRedirects: 0 });
     expect([200, 401, 403]).toContain(response.status());
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });
 
   test('Vaultwarden API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('api.vaultwarden', '/api/config'), { maxRedirects: 0 });
+    const response = await request.get(serviceUrl('vaultwarden', '/api/config'), { maxRedirects: 0 });
     expect([200, 401, 403]).toContain(response.status());
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });
 
   test('Mastodon app API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('api.mastodon', '/api/v1/instance'), { maxRedirects: 0 });
+    const response = await request.get(serviceUrl('mastodon', '/api/v1/instance'), { maxRedirects: 0 });
     expect([200, 401, 403]).toContain(response.status());
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });
 
   test('Home Assistant API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('api.homeassistant', '/api/'), { maxRedirects: 0 });
+    const response = await request.get(serviceUrl('home-native', '/api/'), { maxRedirects: 0 });
     expect([200, 401, 403]).toContain(response.status());
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });

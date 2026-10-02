@@ -20,6 +20,7 @@
   "smokeUnsupportedReason": "requires generated bundle context, deployed networking, secrets, or service dependencies",
   "overlays": [
     "stack.config/test-runner",
+    "stack.containers/android-test-runner",
     "stack.containers/test-runner",
     "stack.runtime.yaml"
   ],

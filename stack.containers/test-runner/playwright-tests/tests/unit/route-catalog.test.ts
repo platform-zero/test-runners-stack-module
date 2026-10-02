@@ -71,6 +71,24 @@ describe('route-catalog', () => {
     expect(new Set(browserWuiRoutes.map((route) => route.visual?.fileStem)).size).toBe(browserWuiRoutes.length);
   });
 
+  it('prepares a cold JupyterHub user server before waiting for its visual contract', () => {
+    const route = findRoute('jupyterhub');
+
+    expect(route.visual?.prepareBeforeSmoke).toBe(true);
+    expect(route.visual?.readinessTimeoutMs).toBe(300000);
+    expect(route.visual?.prepare).toBeDefined();
+    expect(route.visual?.matcher.test('Files')).toBe(true);
+    expect(route.visual?.selector).toContain('Files');
+  });
+
+  it('does not treat Huly shell account actions as an unauthenticated page after workspace preparation', () => {
+    const route = findRoute('huly');
+
+    expect(route.visual?.matcher.test('My Workspaces · Log In')).toBe(true);
+    expect(route.visual?.matcher.test('Platform · Log In')).toBe(false);
+    expect(route.visual?.disallowMatcher?.test('Forgot your password')).toBe(true);
+  });
+
   it('keeps mobile smoke coverage focused on mobile-critical browser services', () => {
     expect(mobileSmokeRoutes.map((route) => route.host).sort()).toEqual([
       'apex',
@@ -161,21 +179,23 @@ describe('route-catalog', () => {
     expect(donetick.visual?.disallowMatcher?.test('Loading... This is taking longer than usual.')).toBe(true);
     expect(donetick.visual?.prepare).toBeDefined();
 
-    expect(erpnext.visual?.path).toBe('/app/supplier/Northstar%20Hosting');
+    expect(erpnext.visual?.path).toBe('/app');
     expect(erpnext.visual?.matcher.test('Framework Quality')).toBe(false);
-    expect(erpnext.visual?.matcher.test('Northstar Hosting')).toBe(true);
+    expect(erpnext.visual?.matcher.test('Getting Started')).toBe(true);
     expect(erpnext.visual?.disallowMatcher?.test('Login to Frappe')).toBe(true);
+    expect(erpnext.visual?.disallowMatcher?.test('Not permitted')).toBe(true);
     expect(erpnext.visual?.prepare).toBeDefined();
   });
 
-  it('rejects empty Grafana logs and qBittorrent native-login false positives', () => {
+  it('requires populated Grafana logs without interpreting log payloads as UI errors', () => {
     const grafana = findRoute('grafana');
     const qbittorrent = findRoute('qbittorrent');
 
     expect(grafana.visual?.matcher.test('All Logs 2026-07-15 18:50:42 INFO')).toBe(true);
     expect(grafana.visual?.matcher.test('All Logs No data')).toBe(false);
-    expect(grafana.visual?.disallowMatcher?.test('No data')).toBe(false);
-    expect(grafana.visual?.disallowMatcher?.test('Data source error')).toBe(true);
+    expect(grafana.smoke?.matcher.test('All Logs 2026-09-11 Failed to load remote avatar')).toBe(true);
+    expect(grafana.smoke?.disallowMatcher).toBeUndefined();
+    expect(grafana.visual?.disallowMatcher).toBeUndefined();
     expect(qbittorrent.visual?.matcher.test('qBittorrent WebUI Username Password Login')).toBe(false);
     expect(qbittorrent.visual?.disallowMatcher?.test('qBittorrent WebUI Username Password Login')).toBe(true);
     expect(qbittorrent.visual?.matcher.test('northstar-portal-backup.iso')).toBe(true);
