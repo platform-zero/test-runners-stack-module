@@ -9,7 +9,6 @@ prometheus
 alerts
 grafana
 vaultwarden
-api.vaultwarden
 planka
 huly
 bookstack
@@ -19,15 +18,13 @@ jellyfin
 donetick
 erpnext
 seafile
-api.seafile
+files-native
 onlyoffice
 matrix
 api.matrix
 matrix-rtc
 element
-api.element
 mastodon
-api.mastodon
 apex
 portal
 homepage
@@ -35,8 +32,8 @@ www
 mail
 jupyterhub
 homeassistant
-direct.homeassistant
-api.homeassistant
+home-native
+ntfy-native
 ntfy
 clickhouse
 models

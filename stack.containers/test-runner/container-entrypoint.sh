@@ -32,7 +32,7 @@ copy_tree() {
 
     rm -rf "$target_dir"
     mkdir -p "$(dirname "$target_dir")"
-    cp -a "$source_dir" "$target_dir"
+    cp -R "$source_dir" "$target_dir"
 }
 
 bootstrap_caddy_ca() {
@@ -204,6 +204,10 @@ record_playwright_suite_artifacts() {
         copy_tree "$RESULTS_DIR/screenshots" "$suite_root/screenshots"
     fi
 
+    if [ -f "$RESULTS_DIR/visual-review.json" ]; then
+        cp "$RESULTS_DIR/visual-review.json" "$suite_root/visual-review.json"
+    fi
+
     chown -R "${TEST_USER}:${TEST_USER}" "$suite_root"
 }
 
@@ -363,6 +367,16 @@ case "${1:-suite}" in
     ts-mobile)
         log "Running Playwright mobile suites"
         run_playwright_npm test:e2e:mobile
+        ;;
+    android-apps)
+        log "Running native Android app suite for API ${2:-36}"
+        exec_as_test_user node /app/playwright-tests/node_modules/ts-node/dist/bin.js \
+            /app/playwright-tests/scripts/android-native-apps.ts "${2:-36}"
+        ;;
+    android-docs-browser)
+        log "Checking Seafile ONLYOFFICE editor in Android Chrome"
+        exec_as_test_user node /app/playwright-tests/node_modules/ts-node/dist/bin.js \
+            /app/playwright-tests/scripts/android-apps.ts "${2:-36}" --only-docs
         ;;
     ts-e2e-smoke)
         log "Running Playwright isolated-user app smoke tests"

@@ -61,6 +61,17 @@ describe('suite orchestration', () => {
     expect(entrypoint).toContain('XDG_RUNTIME_DIR="$TEST_USER_RUNTIME_DIR"');
   });
 
+  it('keeps isolated networking as the default and makes host networking explicit', () => {
+    const script = fs.readFileSync(runnerScript, 'utf8');
+
+    expect(script).toContain('TEST_RUNNER_NETWORK_MODE="${TEST_RUNNER_NETWORK_MODE:-isolated}"');
+    expect(script).toContain('TEST_RUNNER_NETWORK_MODE must be isolated or host');
+    expect(script).toContain('"host.containers.internal:127.0.0.1"');
+    expect(script).toContain('emit_env_arg LIVEKIT_INTERNAL_API_URL "http://host.containers.internal:7880"');
+    expect(script).toContain('"ts-e2e-rtc|ts-e2e-name Element Call MatrixRTC"');
+    expect(script).toContain('TEST_RUNNER_NETWORK_MODE=host');
+  });
+
   it('forces container-control subprocesses through the Podman remote client', () => {
     const wrapperPath = resolveRequiredFile('Podman remote wrapper', [
       '/usr/local/bin/webservices-podman-remote',
@@ -107,10 +118,16 @@ describe('suite orchestration', () => {
   it('preserves per-group Playwright artifacts during aggregate runs', () => {
     const script = fs.readFileSync(suiteScript, 'utf8');
     const config = fs.readFileSync(path.join(repoRoot, 'playwright.config.ts'), 'utf8');
+    const entrypointPath = resolveRequiredFile('container-entrypoint.sh', [
+      '/container-entrypoint.sh',
+      path.resolve(repoRoot, '..', 'container-entrypoint.sh'),
+    ]);
+    const entrypoint = fs.readFileSync(entrypointPath, 'utf8');
 
     expect(script).toContain('PLAYWRIGHT_RUN_LABEL="${group//:/-}"');
     expect(config).toContain("artifactPath('test-results')");
     expect(config).toContain("artifactPath('playwright-report')");
+    expect(entrypoint).toContain('cp "$RESULTS_DIR/visual-review.json" "$suite_root/visual-review.json"');
   });
 
   it('invokes the visual validator through its package entrypoint rather than a copied bin shim', () => {
