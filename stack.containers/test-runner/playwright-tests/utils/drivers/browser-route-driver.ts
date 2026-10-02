@@ -171,6 +171,10 @@ async function isSmokeReady(page: Page, smoke: SmokeContract): Promise<boolean> 
   return true;
 }
 
+export function classifyHulyReadiness(content: string): 'authorization' | null {
+  return /forgot your password|continue as a guest/i.test(content) ? 'authorization' : null;
+}
+
 async function expectIdentityLogin(page: Page): Promise<void> {
   await expect
     .poll(() => isIdentityAuthUrl(page.url()), {

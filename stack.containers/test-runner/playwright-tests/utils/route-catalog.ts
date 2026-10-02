@@ -1,7 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { KeycloakLoginPage } from '../pages/KeycloakLoginPage';
+import { OIDCLoginPage } from '../pages/OIDCLoginPage';
+import { defaultIdentityProvider } from './identity-provider';
 import type { Page } from '@playwright/test';
 import { rootUrl, serviceUrl, stackDomain } from './stack-urls';
+
+const HULY_WORKSPACE_READY = /My Workspaces|Inbox|Projects|Create workspace/i;
 
 export type RouteKind = 'public' | 'forward_auth' | 'oidc_login' | 'non_ui' | 'orphaned';
 

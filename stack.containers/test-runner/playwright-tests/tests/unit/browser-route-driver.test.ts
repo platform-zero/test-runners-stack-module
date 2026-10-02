@@ -68,6 +68,7 @@ import {
   assertAnonymousContract,
   assertSmokeContract,
   captureVisualSnapshot,
+  classifyHulyReadiness,
   isBookStackTransientOidcErrorState,
 } from '../../utils/drivers/browser-route-driver';
 
@@ -213,6 +214,14 @@ describe('browser-route-driver', () => {
           'https://bookstack.datamancy.net/books'
         )
       ).toBe(false);
+    });
+  });
+
+  describe('classifyHulyReadiness', () => {
+    it('projects Huly login prompts to a safe authorization category', () => {
+      expect(classifyHulyReadiness('Forgot your password?')).toBe('authorization');
+      expect(classifyHulyReadiness('Continue as a guest')).toBe('authorization');
+      expect(classifyHulyReadiness('My Workspaces · Log In')).toBeNull();
     });
   });
 
