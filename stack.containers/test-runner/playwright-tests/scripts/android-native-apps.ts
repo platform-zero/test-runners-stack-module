@@ -40,19 +40,31 @@ class AppSession {
   static async open(id: string): Promise<AppSession> {
     const app = lock.apps.find((entry) => entry.id === id);
     if (!app) throw new Error(`unlocked-app:${id}`);
-    const created = await wire('POST', '/session', {
-      capabilities: { alwaysMatch: {
-        platformName: 'Android',
-        'appium:automationName': 'UiAutomator2',
-        'appium:deviceName': 'p0-api36',
-        'appium:app': `/artifacts/android-apks/${id}.apk`,
-        'appium:appPackage': app.package,
-        'appium:appWaitActivity': '*',
-        'appium:autoGrantPermissions': true,
-        'appium:noReset': false,
-        'appium:newCommandTimeout': 1200,
-      } },
-    }, 180_000);
+    let created: WireResponse | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        created = await wire('POST', '/session', {
+          capabilities: { alwaysMatch: {
+            platformName: 'Android',
+            'appium:automationName': 'UiAutomator2',
+            'appium:deviceName': 'p0-api36',
+            'appium:app': `/artifacts/android-apks/${id}.apk`,
+            'appium:appPackage': app.package,
+            'appium:appWaitActivity': '*',
+            'appium:autoGrantPermissions': true,
+            'appium:noReset': false,
+            'appium:newCommandTimeout': 1200,
+          } },
+        }, 180_000);
+        break;
+      } catch (error) {
+        if (attempt === 2 || !/webdriver-command:POST:\/session:(unknown error|session not created)/i.test(String(error))) {
+          throw error;
+        }
+        await delay(3_000 * (attempt + 1));
+      }
+    }
+    if (!created) throw new Error(`session-unavailable:${id}`);
     const session = created.sessionId || created.value?.sessionId;
     if (!session) throw new Error(`session-unavailable:${id}`);
     if (['element', 'homeassistant', 'jellyfin', 'mastodon', 'bitwarden'].includes(id)) {
@@ -273,7 +285,9 @@ async function dismissChromeFirstRun(app: AppSession): Promise<void> {
     } else if (/sign in - google accounts|sign in with ease/i.test(xml)) {
       await app.tap(/^SKIP$/i);
     } else if (/sign in to get your bookmarks|add account to device/i.test(xml)) {
-      await app.tap(/use without an account/i);
+      if (!await app.tapIfVisible(/(?:use|continue) without an account|no thanks|skip/i, 3_000)) {
+        await app.back();
+      }
     } else if (/forgot email\?|learn more about using your account/i.test(xml)) {
       await app.back();
     } else if (/welcome to chrome|make chrome your own/i.test(xml)) {
