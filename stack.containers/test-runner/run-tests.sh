@@ -548,6 +548,7 @@ build_exec_env_args() {
         AIDER_MODEL
         AIDER_EDIT_FORMAT
         CADDY_CONTAINER
+        ANDROID_NATIVE_APP_FILTER
         TESTDEV_SKIP_GPU_INGESTION
     )
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -40,19 +40,31 @@ class AppSession {
   static async open(id: string): Promise<AppSession> {
     const app = lock.apps.find((entry) => entry.id === id);
     if (!app) throw new Error(`unlocked-app:${id}`);
-    const created = await wire('POST', '/session', {
-      capabilities: { alwaysMatch: {
-        platformName: 'Android',
-        'appium:automationName': 'UiAutomator2',
-        'appium:deviceName': 'p0-api36',
-        'appium:app': `/artifacts/android-apks/${id}.apk`,
-        'appium:appPackage': app.package,
-        'appium:appWaitActivity': '*',
-        'appium:autoGrantPermissions': true,
-        'appium:noReset': false,
-        'appium:newCommandTimeout': 1200,
-      } },
-    }, 180_000);
+    let created: WireResponse | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        created = await wire('POST', '/session', {
+          capabilities: { alwaysMatch: {
+            platformName: 'Android',
+            'appium:automationName': 'UiAutomator2',
+            'appium:deviceName': 'p0-api36',
+            'appium:app': `/artifacts/android-apks/${id}.apk`,
+            'appium:appPackage': app.package,
+            'appium:appWaitActivity': '*',
+            'appium:autoGrantPermissions': true,
+            'appium:noReset': false,
+            'appium:newCommandTimeout': 1200,
+          } },
+        }, 180_000);
+        break;
+      } catch (error) {
+        if (attempt === 2 || !/webdriver-command:POST:\/session:(unknown error|session not created)/i.test(String(error))) {
+          throw error;
+        }
+        await delay(3_000 * (attempt + 1));
+      }
+    }
+    if (!created) throw new Error(`session-unavailable:${id}`);
     const session = created.sessionId || created.value?.sessionId;
     if (!session) throw new Error(`session-unavailable:${id}`);
     if (['element', 'homeassistant', 'jellyfin', 'mastodon', 'bitwarden'].includes(id)) {
@@ -273,7 +285,9 @@ async function dismissChromeFirstRun(app: AppSession): Promise<void> {
     } else if (/sign in - google accounts|sign in with ease/i.test(xml)) {
       await app.tap(/^SKIP$/i);
     } else if (/sign in to get your bookmarks|add account to device/i.test(xml)) {
-      await app.tap(/use without an account/i);
+      if (!await app.tapIfVisible(/(?:use|continue) without an account|no thanks|skip/i, 3_000)) {
+        await app.back();
+      }
     } else if (/forgot email\?|learn more about using your account/i.test(xml)) {
       await app.back();
     } else if (/welcome to chrome|make chrome your own/i.test(xml)) {
@@ -286,11 +300,32 @@ async function dismissChromeFirstRun(app: AppSession): Promise<void> {
   throw new Error(`chrome-first-run-unresolved:${app.id}`);
 }
 
+function elementUiStage(xml: string): string {
+  if (/no distributors available|troubleshoot notifications/i.test(xml)) return 'notification-dialog';
+  if (/chats|rooms|explore/i.test(xml)) return 'chats';
+  if (/finish reset/i.test(xml)) return 'finish-reset';
+  if (/yes, reset now/i.test(xml)) return 'confirm-reset';
+  if (/continue reset/i.test(xml)) return 'continue-reset';
+  if (/can.t confirm/i.test(xml)) return 'identity-recovery';
+  if (/import your data|create account/i.test(xml)) return 'account-import';
+  if (/continue to element x/i.test(xml)) return 'return-to-app';
+  if (/enter your account provider/i.test(xml)) return 'provider-entry';
+  if (/username|email/i.test(xml) && /password/i.test(xml)) return 'credentials';
+  if (/keycloak|single sign.on|sso/i.test(xml)) return 'sso';
+  return 'other';
+}
+
 async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
+  let previousStage = '';
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await dismissChromeFirstRun(app);
     const xml = await app.source();
-    if (/continue to element x|import your data|confirm your digital identity|chats|rooms/i.test(xml)) return;
+    if (app.id === 'element') {
+      const stage = elementUiStage(xml);
+      if (stage !== previousStage) process.stdout.write(`[android-native] app=element phase=sso stage=${stage}\n`);
+      previousStage = stage;
+    }
+    if (/continue to element x|import your data|confirm your digital identity|chats|rooms|no distributors available|troubleshoot notifications/i.test(xml)) return;
     if (/use without an account/i.test(xml)) {
       if (await app.tapIfVisible(/use without an account/i, 2_000)) continue;
     }
@@ -313,6 +348,43 @@ async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
     await delay(1_000);
   }
   throw new Error(`auth-form-unavailable:${app.id}`);
+}
+
+async function completeElementOnboarding(app: AppSession): Promise<void> {
+  const deadline = Date.now() + 150_000;
+  let previousStage = '';
+  while (Date.now() < deadline) {
+    let xml: string;
+    try {
+      xml = await app.source();
+    } catch (error) {
+      if (!/webdriver-command:.*unknown error/.test(String(error))) throw error;
+      await delay(2_000);
+      continue;
+    }
+    const stage = elementUiStage(xml);
+    if (stage !== previousStage) process.stdout.write(`[android-native] app=element phase=onboarding stage=${stage}\n`);
+    previousStage = stage;
+    if (/chats|rooms|explore/i.test(xml)) return;
+    const actions: Array<[RegExp, RegExp]> = [
+      [/no distributors available|troubleshoot notifications/i, /^OK$/i],
+      [/finish reset/i, /^Finish reset$/i],
+      [/yes, reset now/i, /^Yes, reset now$/i],
+      [/continue reset/i, /^Continue reset$/i],
+      [/can.t confirm/i, /can.t confirm/i],
+      [/create account/i, /create account/i],
+      [/continue to element x/i, /^Continue$/i],
+      [/not now/i, /^Not now$/i],
+      [/text="OK"|content-desc="OK"/i, /^OK$/i],
+    ];
+    const action = actions.find(([visible]) => visible.test(xml));
+    if (action) {
+      await app.tapIfVisible(action[1], 3_000);
+    } else {
+      await delay(1_000);
+    }
+  }
+  throw new Error('ui-evidence-missing:element:chats|rooms|explore');
 }
 
 async function enterServer(app: AppSession, url: string): Promise<void> {
@@ -391,13 +463,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.tap(/continue/i);
         await app.tapIfVisible(/use without an account/i, 3_000);
         await keycloakSignIn(app, user);
-        await delay(3_000);
-        await app.tapIfVisible(/create account/i, 60_000);
-        await app.tapIfVisible(/^Continue$/, 30_000);
-        await app.tapIfVisible(/can.t confirm/i, 30_000);
-        await app.tapIfVisible(/^Not now$/, 30_000);
-        await app.tapIfVisible(/^OK$/, 5_000);
-        await app.expect(/chats|rooms|explore/i, 60_000);
+        await completeElementOnboarding(app);
         await probe('matrix', '/_matrix/client/versions');
         break;
       case 'homeassistant': {
@@ -721,6 +787,17 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
       default:
         throw new Error(`unexpected-app:${id}`);
     }
+  } catch (error) {
+    if (id === 'element') {
+      try {
+        const screenshot = (await wire('GET', `/session/${app.session}/screenshot`, undefined, 10_000)).value;
+        if (typeof screenshot === 'string') {
+          mkdirSync('/app/test-results/android-api36', { recursive: true });
+          writeFileSync('/app/test-results/android-api36/element-failure.png', Buffer.from(screenshot, 'base64'));
+        }
+      } catch { /* retain the original app failure when Appium cannot capture the screen */ }
+    }
+    throw error;
   } finally {
     await app.close();
   }
@@ -733,17 +810,35 @@ async function main(): Promise<void> {
     const apps = filter ? lock.apps.filter((item) => filter.split(',').includes(item.id)) : lock.apps;
     if (!apps.length) throw new Error('android-native-filter-empty');
     for (const item of apps) {
-      try {
-        await checkApp(item.id, user);
-        process.stdout.write(`[android-native] app=${item.id} result=pass\n`);
-      } catch (error) {
+      let failure: unknown;
+      let passed = false;
+      for (let attempt = 1; attempt <= (item.id === 'element' ? 2 : 1); attempt += 1) {
+        try {
+          await checkApp(item.id, user);
+          passed = true;
+          process.stdout.write(`[android-native] app=${item.id} result=pass attempt=${attempt}\n`);
+          break;
+        } catch (error) {
+          failure = error;
+          if (item.id === 'element' && attempt === 1 &&
+              /webdriver-command:.*unknown error|chrome-first-run-unresolved|ui-control-missing:element:use without an account/i.test(String(error))) {
+            process.stdout.write('[android-native] app=element retry=cold-start\n');
+            await delay(5_000);
+            continue;
+          }
+          break;
+        }
+      }
+      if (!passed) {
         failed += 1;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = failure instanceof Error ? failure.message : String(failure);
         const category = message.split(':')[0].replace(/[^a-z-]/g, '');
         const detail = /^(ui-control-missing|ui-evidence-missing|ui-input-missing):/.test(message)
           ? ` detail=${message.split(':').slice(2).join(':').replace(/[^a-zA-Z0-9|^$.\-]/g, '_')}`
           : /^[a-z-]+:[0-9]+$/.test(message) ? ` status=${message.split(':')[1]}`
-          : message.startsWith('webdriver-command:') ? ` detail=${message.split(':').at(-1)?.replace(/[^a-zA-Z0-9-]/g, '_')}` : '';
+          : message.startsWith('webdriver-command:')
+            ? ` op=${message.split(':')[1]}${message.split(':')[2]?.replace(/\/session\/[^/]+/, '/session/{id}')} detail=${message.split(':').at(-1)?.replace(/[^a-zA-Z0-9-]/g, '_')}`
+            : '';
         process.stdout.write(`[android-native] app=${item.id} result=${category}${detail}\n`);
       }
     }
