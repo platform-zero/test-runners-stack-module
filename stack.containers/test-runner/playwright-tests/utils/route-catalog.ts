@@ -345,53 +345,30 @@ export const browserRouteCatalog: BrowserRoute[] = [
       disallowMatcher: /Forgot your password|Continue as a guest|503 Service Unavailable|Bad Gateway|Internal Server Error/i,
       prepare: async (page, user) => {
         if (!user.password) throw new Error('Huly visual account flow requires the generated test password');
-        // Edge authentication proves the gateway identity, but Huly has a separate
-        // application account. Prefer signing into the existing disposable account;
-        // the shell can show Sign Up even after that account has already been created.
+        // Each suite provisions a fresh disposable Keycloak user. Wait for Huly's
+        // client-side login shell to finish loading before creating its app account.
+        const signUp = page.getByRole('link', { name: 'Sign Up', exact: true });
+        await signUp.waitFor({ state: 'visible', timeout: 30000 });
+        await signUp.click();
         const passwordInput = page.locator('input[type="password"]').first();
-        let passwordVisible = await passwordInput.isVisible().catch(() => false);
-        const login = page.getByRole('button', { name: /^Log In$/i }).last();
-        if (!passwordVisible && await login.isVisible().catch(() => false)) {
-          await login.click({ force: true });
-          await passwordInput.waitFor({ state: 'visible', timeout: 10000 }).catch(() => undefined);
-          passwordVisible = await passwordInput.isVisible().catch(() => false);
-        }
-
-        if (passwordVisible) {
-          const emailInput = page.locator('input[type="email"]').first();
-          if (await emailInput.isVisible().catch(() => false)) {
-            await emailInput.fill(user.email);
-          } else {
-            await page.getByRole('textbox').first().fill(user.email);
-          }
-          await passwordInput.fill(user.password);
-          await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
+        await passwordInput.waitFor({ state: 'visible', timeout: 30000 });
+        const emailInput = page.locator('input[type="email"]').first();
+        if (await emailInput.isVisible().catch(() => false)) {
+          await emailInput.fill(user.email);
         } else {
-          // First-run path only: create the disposable application account.
-          const signUp = page.getByText('Sign Up', { exact: true }).first();
-          if (!await signUp.isVisible().catch(() => false)) {
-            throw new Error('Huly did not expose an application login or first-run signup form');
-          }
-          await signUp.click({ force: true });
-          await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
-          const emailInput = page.locator('input[type="email"]').first();
-          if (await emailInput.isVisible().catch(() => false)) {
-            await emailInput.fill(user.email);
-          } else {
-            await page.getByRole('textbox').first().fill(user.email);
-          }
-          const passwordInputs = page.locator('input[type="password"]');
-          const passwordCount = await passwordInputs.count();
-          for (let index = 0; index < passwordCount; index += 1) {
-            await passwordInputs.nth(index).fill(user.password);
-          }
-          const name = page.getByLabel(/name|full name/i).first();
-          if (await name.isVisible().catch(() => false)) {
-            await name.fill(user.displayName || 'Playwright User');
-          }
-          await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
-            .click({ force: true });
+          await page.getByRole('textbox').first().fill(user.email);
         }
+        const passwordInputs = page.locator('input[type="password"]');
+        const passwordCount = await passwordInputs.count();
+        for (let index = 0; index < passwordCount; index += 1) {
+          await passwordInputs.nth(index).fill(user.password);
+        }
+        const name = page.getByLabel(/name|full name/i).first();
+        if (await name.isVisible().catch(() => false)) {
+          await name.fill(user.displayName || 'Playwright User');
+        }
+        await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
+          .click({ force: true });
         await waitForBodyMatch(page, /Platform|My Workspaces|Inbox|Projects|Create workspace/i,
           'Huly application session should reach its workspace UI after signup/login');
       },
