@@ -304,7 +304,7 @@ async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await dismissChromeFirstRun(app);
     const xml = await app.source();
-    if (/continue to element x|import your data|confirm your digital identity|chats|rooms/i.test(xml)) return;
+    if (/continue to element x|import your data|confirm your digital identity|chats|rooms|no distributors available|troubleshoot notifications/i.test(xml)) return;
     if (/use without an account/i.test(xml)) {
       if (await app.tapIfVisible(/use without an account/i, 2_000)) continue;
     }
@@ -342,6 +342,7 @@ async function completeElementOnboarding(app: AppSession): Promise<void> {
     }
     if (/chats|rooms|explore/i.test(xml)) return;
     const actions: Array<[RegExp, RegExp]> = [
+      [/no distributors available|troubleshoot notifications/i, /^OK$/i],
       [/finish reset/i, /^Finish reset$/i],
       [/yes, reset now/i, /^Yes, reset now$/i],
       [/continue reset/i, /^Continue reset$/i],
