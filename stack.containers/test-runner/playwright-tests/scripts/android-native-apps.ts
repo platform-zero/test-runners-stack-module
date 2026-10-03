@@ -329,6 +329,38 @@ async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
   throw new Error(`auth-form-unavailable:${app.id}`);
 }
 
+async function completeElementOnboarding(app: AppSession): Promise<void> {
+  const deadline = Date.now() + 150_000;
+  while (Date.now() < deadline) {
+    let xml: string;
+    try {
+      xml = await app.source();
+    } catch (error) {
+      if (!/webdriver-command:.*unknown error/.test(String(error))) throw error;
+      await delay(2_000);
+      continue;
+    }
+    if (/chats|rooms|explore/i.test(xml)) return;
+    const actions: Array<[RegExp, RegExp]> = [
+      [/finish reset/i, /^Finish reset$/i],
+      [/yes, reset now/i, /^Yes, reset now$/i],
+      [/continue reset/i, /^Continue reset$/i],
+      [/can.t confirm/i, /can.t confirm/i],
+      [/create account/i, /create account/i],
+      [/continue to element x/i, /^Continue$/i],
+      [/not now/i, /^Not now$/i],
+      [/text="OK"|content-desc="OK"/i, /^OK$/i],
+    ];
+    const action = actions.find(([visible]) => visible.test(xml));
+    if (action) {
+      await app.tapIfVisible(action[1], 3_000);
+    } else {
+      await delay(1_000);
+    }
+  }
+  throw new Error('ui-evidence-missing:element:chats|rooms|explore');
+}
+
 async function enterServer(app: AppSession, url: string): Promise<void> {
   await app.tapIfVisible(/add server|connect to server|add account|self.hosted|use your own server/i, 5_000);
   await app.input(0, url);
@@ -405,18 +437,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.tap(/continue/i);
         await app.tapIfVisible(/use without an account/i, 3_000);
         await keycloakSignIn(app, user);
-        await delay(3_000);
-        await app.tapIfVisible(/create account/i, 60_000);
-        await app.tapIfVisible(/^Continue$/, 30_000);
-        await app.tapIfVisible(/can.t confirm/i, 30_000);
-        // The managed test user has no verified device or recovery key. Element X
-        // presents a second confirmation before completing identity recovery.
-        await app.tapIfVisible(/^Continue reset$/i, 30_000);
-        await app.tapIfVisible(/^Yes, reset now$/i, 10_000);
-        await app.tapIfVisible(/^Finish reset$/i, 30_000);
-        await app.tapIfVisible(/^Not now$/, 30_000);
-        await app.tapIfVisible(/^OK$/, 5_000);
-        await app.expect(/chats|rooms|explore/i, 60_000);
+        await completeElementOnboarding(app);
         await probe('matrix', '/_matrix/client/versions');
         break;
       case 'homeassistant': {
