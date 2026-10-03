@@ -300,10 +300,31 @@ async function dismissChromeFirstRun(app: AppSession): Promise<void> {
   throw new Error(`chrome-first-run-unresolved:${app.id}`);
 }
 
+function elementUiStage(xml: string): string {
+  if (/no distributors available|troubleshoot notifications/i.test(xml)) return 'notification-dialog';
+  if (/chats|rooms|explore/i.test(xml)) return 'chats';
+  if (/finish reset/i.test(xml)) return 'finish-reset';
+  if (/yes, reset now/i.test(xml)) return 'confirm-reset';
+  if (/continue reset/i.test(xml)) return 'continue-reset';
+  if (/can.t confirm/i.test(xml)) return 'identity-recovery';
+  if (/import your data|create account/i.test(xml)) return 'account-import';
+  if (/continue to element x/i.test(xml)) return 'return-to-app';
+  if (/enter your account provider/i.test(xml)) return 'provider-entry';
+  if (/username|email/i.test(xml) && /password/i.test(xml)) return 'credentials';
+  if (/keycloak|single sign.on|sso/i.test(xml)) return 'sso';
+  return 'other';
+}
+
 async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
+  let previousStage = '';
   for (let attempt = 0; attempt < 30; attempt += 1) {
     await dismissChromeFirstRun(app);
     const xml = await app.source();
+    if (app.id === 'element') {
+      const stage = elementUiStage(xml);
+      if (stage !== previousStage) process.stdout.write(`[android-native] app=element phase=sso stage=${stage}\n`);
+      previousStage = stage;
+    }
     if (/continue to element x|import your data|confirm your digital identity|chats|rooms|no distributors available|troubleshoot notifications/i.test(xml)) return;
     if (/use without an account/i.test(xml)) {
       if (await app.tapIfVisible(/use without an account/i, 2_000)) continue;
@@ -331,6 +352,7 @@ async function keycloakSignIn(app: AppSession, user: TestUser): Promise<void> {
 
 async function completeElementOnboarding(app: AppSession): Promise<void> {
   const deadline = Date.now() + 150_000;
+  let previousStage = '';
   while (Date.now() < deadline) {
     let xml: string;
     try {
@@ -340,6 +362,9 @@ async function completeElementOnboarding(app: AppSession): Promise<void> {
       await delay(2_000);
       continue;
     }
+    const stage = elementUiStage(xml);
+    if (stage !== previousStage) process.stdout.write(`[android-native] app=element phase=onboarding stage=${stage}\n`);
+    previousStage = stage;
     if (/chats|rooms|explore/i.test(xml)) return;
     const actions: Array<[RegExp, RegExp]> = [
       [/no distributors available|troubleshoot notifications/i, /^OK$/i],
