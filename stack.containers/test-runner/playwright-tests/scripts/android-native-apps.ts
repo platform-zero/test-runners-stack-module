@@ -409,6 +409,9 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         await app.tapIfVisible(/create account/i, 60_000);
         await app.tapIfVisible(/^Continue$/, 30_000);
         await app.tapIfVisible(/can.t confirm/i, 30_000);
+        // The managed test user has no verified device or recovery key. Element X
+        // presents a second confirmation before completing identity recovery.
+        await app.tapIfVisible(/^Continue reset$/i, 30_000);
         await app.tapIfVisible(/^Not now$/, 30_000);
         await app.tapIfVisible(/^OK$/, 5_000);
         await app.expect(/chats|rooms|explore/i, 60_000);
