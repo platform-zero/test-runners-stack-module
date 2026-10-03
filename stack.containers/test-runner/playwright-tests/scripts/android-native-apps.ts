@@ -743,7 +743,9 @@ async function main(): Promise<void> {
         const detail = /^(ui-control-missing|ui-evidence-missing|ui-input-missing):/.test(message)
           ? ` detail=${message.split(':').slice(2).join(':').replace(/[^a-zA-Z0-9|^$.\-]/g, '_')}`
           : /^[a-z-]+:[0-9]+$/.test(message) ? ` status=${message.split(':')[1]}`
-          : message.startsWith('webdriver-command:') ? ` detail=${message.split(':').at(-1)?.replace(/[^a-zA-Z0-9-]/g, '_')}` : '';
+          : message.startsWith('webdriver-command:')
+            ? ` op=${message.split(':')[1]}${message.split(':')[2]?.replace(/\/session\/[^/]+/, '/session/{id}')} detail=${message.split(':').at(-1)?.replace(/[^a-zA-Z0-9-]/g, '_')}`
+            : '';
         process.stdout.write(`[android-native] app=${item.id} result=${category}${detail}\n`);
       }
     }
