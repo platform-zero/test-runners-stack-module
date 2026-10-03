@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -735,6 +735,17 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
       default:
         throw new Error(`unexpected-app:${id}`);
     }
+  } catch (error) {
+    if (id === 'element') {
+      try {
+        const screenshot = (await wire('GET', `/session/${app.session}/screenshot`, undefined, 10_000)).value;
+        if (typeof screenshot === 'string') {
+          mkdirSync('/app/test-results/android-api36', { recursive: true });
+          writeFileSync('/app/test-results/android-api36/element-failure.png', Buffer.from(screenshot, 'base64'));
+        }
+      } catch { /* retain the original app failure when Appium cannot capture the screen */ }
+    }
+    throw error;
   } finally {
     await app.close();
   }
@@ -747,12 +758,28 @@ async function main(): Promise<void> {
     const apps = filter ? lock.apps.filter((item) => filter.split(',').includes(item.id)) : lock.apps;
     if (!apps.length) throw new Error('android-native-filter-empty');
     for (const item of apps) {
-      try {
-        await checkApp(item.id, user);
-        process.stdout.write(`[android-native] app=${item.id} result=pass\n`);
-      } catch (error) {
+      let failure: unknown;
+      let passed = false;
+      for (let attempt = 1; attempt <= (item.id === 'element' ? 2 : 1); attempt += 1) {
+        try {
+          await checkApp(item.id, user);
+          passed = true;
+          process.stdout.write(`[android-native] app=${item.id} result=pass attempt=${attempt}\n`);
+          break;
+        } catch (error) {
+          failure = error;
+          if (item.id === 'element' && attempt === 1 &&
+              /webdriver-command:.*unknown error|chrome-first-run-unresolved|ui-control-missing:element:use without an account/i.test(String(error))) {
+            process.stdout.write('[android-native] app=element retry=cold-start\n');
+            await delay(5_000);
+            continue;
+          }
+          break;
+        }
+      }
+      if (!passed) {
         failed += 1;
-        const message = error instanceof Error ? error.message : String(error);
+        const message = failure instanceof Error ? failure.message : String(failure);
         const category = message.split(':')[0].replace(/[^a-z-]/g, '');
         const detail = /^(ui-control-missing|ui-evidence-missing|ui-input-missing):/.test(message)
           ? ` detail=${message.split(':').slice(2).join(':').replace(/[^a-zA-Z0-9|^$.\-]/g, '_')}`
