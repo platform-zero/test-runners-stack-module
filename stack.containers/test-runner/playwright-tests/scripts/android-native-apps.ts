@@ -788,12 +788,12 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         throw new Error(`unexpected-app:${id}`);
     }
   } catch (error) {
-    if (id === 'element') {
+    if (id === 'element' || id === 'homeassistant') {
       try {
         const screenshot = (await wire('GET', `/session/${app.session}/screenshot`, undefined, 10_000)).value;
         if (typeof screenshot === 'string') {
           mkdirSync('/app/test-results/android-api36', { recursive: true });
-          writeFileSync('/app/test-results/android-api36/element-failure.png', Buffer.from(screenshot, 'base64'));
+          writeFileSync(`/app/test-results/android-api36/${id}-failure.png`, Buffer.from(screenshot, 'base64'));
         }
       } catch { /* retain the original app failure when Appium cannot capture the screen */ }
     }
