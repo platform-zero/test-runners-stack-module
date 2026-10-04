@@ -378,34 +378,15 @@ export const browserRouteCatalog: BrowserRoute[] = [
           await signUp.click({ force: true });
           const signupFields = page.getByRole('textbox');
           await signupFields.first().waitFor({ state: 'visible', timeout: 10000 });
-          const emailInput = page.locator('input[type="email"]').first();
-          if (await emailInput.isVisible().catch(() => false)) {
-            await emailInput.fill(user.email);
-          } else {
-            await page.getByRole('textbox').first().fill(user.email);
+          if (await signupFields.count() < 5) {
+            throw new Error('Huly signup form did not expose its required fields');
           }
-          const passwordInputs = page.locator('input[type="password"]');
-          const passwordCount = await passwordInputs.count();
-          if (passwordCount) {
-            for (let index = 0; index < passwordCount; index += 1) {
-              await passwordInputs.nth(index).fill(user.password);
-            }
-          } else {
-            const count = await signupFields.count();
-            for (let index = 1; index < count; index += 1) {
-              const field = signupFields.nth(index);
-              const context = (await field.locator('..').textContent() || '').toLowerCase();
-              if (/name/.test(context)) {
-                await field.fill(user.displayName || 'Playwright User');
-              } else {
-                await field.fill(user.password);
-              }
-            }
-          }
-          const name = page.getByLabel(/name|full name/i).first();
-          if (await name.isVisible().catch(() => false)) {
-            await name.fill(user.displayName || 'Playwright User');
-          }
+          const [firstName, ...lastNameParts] = (user.displayName || 'Playwright User').trim().split(/\s+/);
+          await signupFields.nth(0).fill(firstName);
+          await signupFields.nth(1).fill(lastNameParts.join(' ') || 'User');
+          await signupFields.nth(2).fill(user.email);
+          await signupFields.nth(3).fill(user.password);
+          await signupFields.nth(4).fill(user.password);
           await page.getByRole('button', { name: /sign up|create account|register|continue/i }).last()
             .click({ force: true });
         }
