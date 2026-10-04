@@ -620,7 +620,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         const username = process.env.NTFY_USERNAME;
         const password = process.env.NTFY_PASSWORD;
         if (!username || !password) throw new Error('ntfy-credentials-missing');
-        const topic = `test-android-${Date.now().toString(36)}`;
+        const topic = `${user.username.toLowerCase()}_alerts`;
         const marker = `native-ntfy-${Date.now().toString(36)}`;
         const server = `https://ntfy-native.${domain}`;
         await app.tapIfVisible(/dismiss/i, 3_000);
@@ -788,12 +788,12 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         throw new Error(`unexpected-app:${id}`);
     }
   } catch (error) {
-    if (id === 'element') {
+    if (id === 'element' || id === 'homeassistant') {
       try {
         const screenshot = (await wire('GET', `/session/${app.session}/screenshot`, undefined, 10_000)).value;
         if (typeof screenshot === 'string') {
           mkdirSync('/app/test-results/android-api36', { recursive: true });
-          writeFileSync('/app/test-results/android-api36/element-failure.png', Buffer.from(screenshot, 'base64'));
+          writeFileSync(`/app/test-results/android-api36/${id}-failure.png`, Buffer.from(screenshot, 'base64'));
         }
       } catch { /* retain the original app failure when Appium cannot capture the screen */ }
     }
