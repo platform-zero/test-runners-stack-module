@@ -374,9 +374,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
         } else {
           // First-run path only: create the disposable application account.
           const signUp = page.getByRole('link', { name: 'Sign Up', exact: true }).first();
-          if (!await signUp.isVisible().catch(() => false)) {
-            throw new Error('Huly did not expose an application login or first-run signup form');
-          }
+          await signUp.waitFor({ state: 'visible', timeout: 30000 });
           await signUp.click({ force: true });
           const signupFields = page.getByRole('textbox');
           await signupFields.first().waitFor({ state: 'visible', timeout: 10000 });
