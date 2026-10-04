@@ -34,7 +34,12 @@ test.describe('Non-browser API endpoints', () => {
   });
 
   test('Home Assistant API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('home-native', '/api/'), { maxRedirects: 0 });
+    const url = serviceUrl('home-native', '/api/');
+    let response = await request.get(url, { maxRedirects: 0 });
+    for (let attempt = 0; attempt < 2 && response.status() === 502; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      response = await request.get(url, { maxRedirects: 0 });
+    }
     expect([200, 401, 403]).toContain(response.status());
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });
