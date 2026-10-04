@@ -373,12 +373,13 @@ export const browserRouteCatalog: BrowserRoute[] = [
           await page.getByRole('button', { name: /log in|sign in/i }).last().click({ force: true });
         } else {
           // First-run path only: create the disposable application account.
-          const signUp = page.getByText('Sign Up', { exact: true }).first();
+          const signUp = page.getByRole('link', { name: 'Sign Up', exact: true }).first();
           if (!await signUp.isVisible().catch(() => false)) {
             throw new Error('Huly did not expose an application login or first-run signup form');
           }
           await signUp.click({ force: true });
-          await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
+          const signupFields = page.getByRole('textbox');
+          await signupFields.first().waitFor({ state: 'visible', timeout: 10000 });
           const emailInput = page.locator('input[type="email"]').first();
           if (await emailInput.isVisible().catch(() => false)) {
             await emailInput.fill(user.email);
@@ -387,8 +388,21 @@ export const browserRouteCatalog: BrowserRoute[] = [
           }
           const passwordInputs = page.locator('input[type="password"]');
           const passwordCount = await passwordInputs.count();
-          for (let index = 0; index < passwordCount; index += 1) {
-            await passwordInputs.nth(index).fill(user.password);
+          if (passwordCount) {
+            for (let index = 0; index < passwordCount; index += 1) {
+              await passwordInputs.nth(index).fill(user.password);
+            }
+          } else {
+            const count = await signupFields.count();
+            for (let index = 1; index < count; index += 1) {
+              const field = signupFields.nth(index);
+              const context = (await field.locator('..').textContent() || '').toLowerCase();
+              if (/name/.test(context)) {
+                await field.fill(user.displayName || 'Playwright User');
+              } else {
+                await field.fill(user.password);
+              }
+            }
           }
           const name = page.getByLabel(/name|full name/i).first();
           if (await name.isVisible().catch(() => false)) {
