@@ -620,7 +620,7 @@ async function checkApp(id: string, user: TestUser): Promise<void> {
         const username = process.env.NTFY_USERNAME;
         const password = process.env.NTFY_PASSWORD;
         if (!username || !password) throw new Error('ntfy-credentials-missing');
-        const topic = `test-android-${Date.now().toString(36)}`;
+        const topic = `${user.username.toLowerCase()}_alerts`;
         const marker = `native-ntfy-${Date.now().toString(36)}`;
         const server = `https://ntfy-native.${domain}`;
         await app.tapIfVisible(/dismiss/i, 3_000);
