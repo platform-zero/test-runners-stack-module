@@ -66,7 +66,9 @@ if not certs:
     raise SystemExit('Declared CA input contains no certificates')
 for cert in certs:
     digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert(cert)).hexdigest()
-    (output / (digest + '.crt')).write_text(cert + '\n')
+    path = output / (digest + '.crt')
+    path.write_text(cert + '\n')
+    path.chmod(0o644)
 PEM
     bootstrap_nss_caddy_ca "$parts"
 

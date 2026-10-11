@@ -1077,7 +1077,9 @@ export function routeUrl(route: BrowserRoute, overridePath?: string): string {
   if (route.host === 'www') {
     return `https://www.${stackDomain}${targetPath}`;
   }
-  return serviceUrl(route.host, targetPath);
+  // A wildcard is an inventory matcher, not a valid browser TLS hostname.
+  const probeHost = route.host.startsWith('*.') ? `p0-boundary-probe.${route.host.slice(2)}` : route.host;
+  return serviceUrl(probeHost, targetPath);
 }
 
 export function routeUrlPattern(host: string): RegExp {
@@ -1085,7 +1087,8 @@ export function routeUrlPattern(host: string): RegExp {
     return new RegExp(`^https://(?:www\\.)?${escapeRegex(stackDomain)}(?:/|$)`, 'i');
   }
 
-  return new RegExp(`^https://${escapeRegex(host)}\\.${escapeRegex(stackDomain)}(?:/|$)`, 'i');
+  const hostPattern = host.startsWith('*.') ? `[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\\.${escapeRegex(host.slice(2))}` : escapeRegex(host);
+  return new RegExp(`^https://${hostPattern}\\.${escapeRegex(stackDomain)}(?:/|$)`, 'i');
 }
 
 export function findRoute(host: string): BrowserRoute {

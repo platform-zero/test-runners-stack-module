@@ -116,6 +116,7 @@ describe('route-catalog', () => {
     expect(routeUrl(findRoute('apex'))).toBe('https://datamancy.net/');
     expect(routeUrl(findRoute('grafana'), '/explore')).toBe('https://grafana.datamancy.net/explore');
     expect(routeUrl(findRoute('www'), '/docs')).toBe('https://www.datamancy.net/docs');
+    expect(routeUrl(findRoute('*.apps'))).toBe('https://p0-boundary-probe.apps.datamancy.net/');
   });
 
   it('builds route URL patterns for apex and subdomains', () => {
@@ -123,6 +124,9 @@ describe('route-catalog', () => {
     expect(routeUrlPattern('apex').test('https://www.datamancy.net/login')).toBe(true);
     expect(routeUrlPattern('grafana').test('https://grafana.datamancy.net/dashboards')).toBe(true);
     expect(routeUrlPattern('grafana').test('https://grafana.example.net/dashboards')).toBe(false);
+    expect(routeUrlPattern('*.apps').test('https://p0-boundary-probe.apps.datamancy.net/')).toBe(true);
+    expect(routeUrlPattern('*.apps').test('https://*.apps.datamancy.net/')).toBe(false);
+    expect(routeUrlPattern('*.apps').test('https://nested.child.apps.datamancy.net/')).toBe(false);
   });
 
   it('finds known routes and throws for unknown hosts', () => {
