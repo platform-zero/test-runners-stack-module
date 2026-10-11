@@ -3,6 +3,8 @@
 from pathlib import Path
 import unittest
 import subprocess
+import re
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1] / 'stack.containers/test-runner'
 
@@ -41,13 +43,25 @@ with open(files[0]) as stream:
 assert 'UNIT_TOKEN=source-unit-fixture' in data
 assert 'CONTAINER_HOST=container-transport' in data
 assert args.index('--env-file') < args.index('fixture-image')
+assert args[-3:] == ['node', '-e', 'const x=1']
 CHECK
 }
 probe() {
- local run_args=(run --rm -e UNIT_TOKEN=source-unit-fixture -e CONTAINER_HOST=container-transport fixture-image command)
+ local run_args=(run --rm -e UNIT_TOKEN=source-unit-fixture -e CONTAINER_HOST=container-transport fixture-image node -e 'const x=1')
 ''' + block + '\n}\nprobe\n'
         result = subprocess.run(['bash'], input=script, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, 'anonymous environment transport must work without argv values or host override')
+
+    def test_all_declared_bundle_certificates_are_split(self):
+        text = (ROOT / 'container-entrypoint.sh').read_text()
+        script = text.split("<<'PEM'\n", 1)[1].split('\nPEM', 1)[0]
+        source = Path('/etc/ssl/certs/ca-certificates.crt')
+        expected = len(set(re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', source.read_text(), re.S)))
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(['python3', '-', str(source), directory], input=script, text=True, capture_output=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(len(list(Path(directory).glob('*.crt'))), expected)
+        self.assertIn('for certificate in "$parts"/*.crt', text)
 
     def test_native_trust_bootstrap_is_not_suppressed(self):
         text = (ROOT / 'container-entrypoint.sh').read_text()

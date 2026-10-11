@@ -53,17 +53,39 @@ bootstrap_caddy_ca() {
     install -m 0644 "$source_cert" "$CADDY_CA_TARGET"
 
     update-ca-certificates >/dev/null 2>&1
-    bootstrap_nss_caddy_ca
+    # The declared public CA input can be a full OS + Caddy PEM bundle. certutil
+    # and keytool import only its first certificate, unlike OpenSSL/Node.
+    local parts
+    parts="$(mktemp -d)"
+    chmod 0755 "$parts"
+    python3 - "$CADDY_CA_TARGET" "$parts" <<'PEM'
+import hashlib, pathlib, re, ssl, sys
+source, output = map(pathlib.Path, sys.argv[1:])
+certs = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', source.read_text(), re.S)
+if not certs:
+    raise SystemExit('Declared CA input contains no certificates')
+for cert in certs:
+    digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert(cert)).hexdigest()
+    (output / (digest + '.crt')).write_text(cert + '\n')
+PEM
+    bootstrap_nss_caddy_ca "$parts"
 
     if command -v keytool >/dev/null 2>&1; then
-        if ! keytool -list -cacerts -storepass changeit -alias "$CADDY_CA_ALIAS" >/dev/null 2>&1; then
-            keytool -importcert -noprompt -trustcacerts \
-                -alias "$CADDY_CA_ALIAS" \
-                -file "$CADDY_CA_TARGET" \
-                -cacerts \
-                -storepass changeit >/dev/null 2>&1
-        fi
+        keytool -list -cacerts -storepass changeit -rfc >"$parts/java-trusted.pem"
+        python3 - "$parts" <<'JAVA'
+import hashlib, pathlib, re, ssl, sys
+parts = pathlib.Path(sys.argv[1])
+trusted = {hashlib.sha256(ssl.PEM_cert_to_DER_cert(cert)).hexdigest() for cert in re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', (parts / 'java-trusted.pem').read_text(), re.S)}
+(parts / 'java-missing').write_text(''.join(str(cert) + '\n' for cert in sorted(parts.glob('*.crt')) if cert.stem not in trusted))
+JAVA
+        local certificate alias
+        while IFS= read -r certificate; do
+            alias="$CADDY_CA_ALIAS-$(basename "$certificate" .crt)"
+            keytool -importcert -noprompt -trustcacerts -alias "$alias" \
+                -file "$certificate" -cacerts -storepass changeit >/dev/null 2>&1
+        done <"$parts/java-missing"
     fi
+    rm -rf "$parts"
 }
 
 bootstrap_nss_caddy_ca() {
@@ -72,18 +94,22 @@ bootstrap_nss_caddy_ca() {
         return 1
     fi
 
-    local database
-    # Trust the same exact public CA in both Chromium's legacy and M146+ NSS locations.
+    local database certificate alias
+    local parts="$1"
+    # Trust every certificate in the exact declared bundle in both NSS locations.
     for database in "$NSSDB_DIR" "$TEST_USER_HOME/.local/share/pki/nssdb"; do
         mkdir -p "$database"
         chown -R "${TEST_USER}:${TEST_USER}" "$(dirname "$database")"
         if ! gosu "$TEST_USER" certutil -d "sql:${database}" -L >/dev/null 2>&1; then
             gosu "$TEST_USER" certutil -d "sql:${database}" -N --empty-password >/dev/null 2>&1
         fi
-        if gosu "$TEST_USER" certutil -d "sql:${database}" -L -n "$CADDY_CA_ALIAS" >/dev/null 2>&1; then
-            gosu "$TEST_USER" certutil -d "sql:${database}" -D -n "$CADDY_CA_ALIAS" >/dev/null 2>&1
-        fi
-        gosu "$TEST_USER" certutil -d "sql:${database}" -A -t "C,," -n "$CADDY_CA_ALIAS" -i "$CADDY_CA_TARGET" >/dev/null 2>&1
+        for certificate in "$parts"/*.crt; do
+            alias="$CADDY_CA_ALIAS-$(basename "$certificate" .crt)"
+            if gosu "$TEST_USER" certutil -d "sql:${database}" -L -n "$alias" >/dev/null 2>&1; then
+                gosu "$TEST_USER" certutil -d "sql:${database}" -D -n "$alias" >/dev/null 2>&1
+            fi
+            gosu "$TEST_USER" certutil -d "sql:${database}" -A -t "C,," -n "$alias" -i "$certificate" >/dev/null 2>&1
+        done
     done
 }
 

@@ -919,9 +919,14 @@ run_podman_test_container() {
         # Send container overrides through a private anonymous local pipe, not argv
         # or a plaintext transfer file. Do not overwrite the host CLI's transport
         # environment with the container's CONTAINER_HOST / XDG_RUNTIME_DIR values.
-        local index assignment key env_input
+        local index assignment key env_input overrides_added=false
         local private_assignments=() filtered_args=() final_args=()
         for ((index=0; index<${#run_args[@]}; index++)); do
+            if [[ "${run_args[index]}" == "$TEST_RUNNER_IMAGE" ]]; then
+                # Command flags (e.g. node -e) are not Podman environment options.
+                filtered_args+=("${run_args[@]:index}")
+                break
+            fi
             if [[ "${run_args[index]}" == "-e" || "${run_args[index]}" == "--env" ]]; then
                 assignment="${run_args[index+1]}"
                 if [[ "$assignment" == *=* ]]; then
@@ -937,8 +942,9 @@ run_podman_test_container() {
         exec {env_input}< <(printf '%s\n' "${private_assignments[@]}")
         # Last env-file wins; place overrides after declared inputs, before image.
         for assignment in "${filtered_args[@]}"; do
-            if [[ "$assignment" == "$TEST_RUNNER_IMAGE" ]]; then
+            if [[ "$assignment" == "$TEST_RUNNER_IMAGE" && "$overrides_added" == false ]]; then
                 final_args+=(--env-file "/proc/self/fd/$env_input")
+                overrides_added=true
             fi
             final_args+=("$assignment")
         done
