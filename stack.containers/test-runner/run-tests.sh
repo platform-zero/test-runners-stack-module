@@ -838,7 +838,7 @@ podman_run_env_args() {
     printf '%s\n' "-e"
     printf '%s\n' "MAILSERVER_URL=${MAILSERVER_URL:-host.containers.internal:25}"
     printf '%s\n' "-e"
-    printf '%s\n' "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-true}"
+    printf '%s\n' "PLAYWRIGHT_IGNORE_HTTPS_ERRORS=${PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-false}"
     podman_run_service_env_args "$env_file"
     printf '%s\n' "-e"
     printf '%s\n' "TEST_RUNNER_MANAGED_COMMAND_LINE=$command_line"
@@ -915,7 +915,25 @@ run_podman_test_container() {
     )
 
     set +e
-    rootless_podman "${run_args[@]}"
+    (
+        # Values belong in the private child environment, never Podman's argv.
+        # --env NAME inherits the same declared value without exposing credentials.
+        local index assignment key
+        for ((index=0; index<${#run_args[@]}; index++)); do
+            if [[ "${run_args[index]}" == "-e" || "${run_args[index]}" == "--env" ]]; then
+                assignment="${run_args[index+1]}"
+                if [[ "$assignment" == *=* ]]; then
+                    key="${assignment%%=*}"
+                    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || exit 1
+                    # Intentional KEY=value export after validating the identifier.
+                    # shellcheck disable=SC2163
+                    export "$assignment"
+                    run_args[index+1]="$key"
+                fi
+            fi
+        done
+        rootless_podman "${run_args[@]}"
+    )
     status=$?
     set -e
     return "$status"

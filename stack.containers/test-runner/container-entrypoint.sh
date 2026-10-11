@@ -52,8 +52,8 @@ bootstrap_caddy_ca() {
 
     install -m 0644 "$source_cert" "$CADDY_CA_TARGET"
 
-    update-ca-certificates >/dev/null 2>&1 || true
-    bootstrap_nss_caddy_ca || true
+    update-ca-certificates >/dev/null 2>&1
+    bootstrap_nss_caddy_ca
 
     if command -v keytool >/dev/null 2>&1; then
         if ! keytool -list -cacerts -storepass changeit -alias "$CADDY_CA_ALIAS" >/dev/null 2>&1; then
@@ -61,26 +61,30 @@ bootstrap_caddy_ca() {
                 -alias "$CADDY_CA_ALIAS" \
                 -file "$CADDY_CA_TARGET" \
                 -cacerts \
-                -storepass changeit >/dev/null 2>&1 || true
+                -storepass changeit >/dev/null 2>&1
         fi
     fi
 }
 
 bootstrap_nss_caddy_ca() {
     if ! command -v certutil >/dev/null 2>&1; then
-        log "certutil is unavailable; skipping Chromium NSS trust bootstrap"
-        return 0
+        log "certutil is unavailable; refusing incomplete Chromium trust bootstrap"
+        return 1
     fi
 
-    mkdir -p "$NSSDB_DIR"
-    chown -R "${TEST_USER}:${TEST_USER}" "$(dirname "$NSSDB_DIR")"
-
-    if ! gosu "$TEST_USER" certutil -d "sql:${NSSDB_DIR}" -L >/dev/null 2>&1; then
-        gosu "$TEST_USER" certutil -d "sql:${NSSDB_DIR}" -N --empty-password >/dev/null 2>&1
-    fi
-
-    gosu "$TEST_USER" certutil -d "sql:${NSSDB_DIR}" -D -n "$CADDY_CA_ALIAS" >/dev/null 2>&1 || true
-    gosu "$TEST_USER" certutil -d "sql:${NSSDB_DIR}" -A -t "C,," -n "$CADDY_CA_ALIAS" -i "$CADDY_CA_TARGET" >/dev/null 2>&1
+    local database
+    # Trust the same exact public CA in both Chromium's legacy and M146+ NSS locations.
+    for database in "$NSSDB_DIR" "$TEST_USER_HOME/.local/share/pki/nssdb"; do
+        mkdir -p "$database"
+        chown -R "${TEST_USER}:${TEST_USER}" "$(dirname "$database")"
+        if ! gosu "$TEST_USER" certutil -d "sql:${database}" -L >/dev/null 2>&1; then
+            gosu "$TEST_USER" certutil -d "sql:${database}" -N --empty-password >/dev/null 2>&1
+        fi
+        if gosu "$TEST_USER" certutil -d "sql:${database}" -L -n "$CADDY_CA_ALIAS" >/dev/null 2>&1; then
+            gosu "$TEST_USER" certutil -d "sql:${database}" -D -n "$CADDY_CA_ALIAS" >/dev/null 2>&1
+        fi
+        gosu "$TEST_USER" certutil -d "sql:${database}" -A -t "C,," -n "$CADDY_CA_ALIAS" -i "$CADDY_CA_TARGET" >/dev/null 2>&1
+    done
 }
 
 run_as_test_user() {
