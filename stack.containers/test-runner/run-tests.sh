@@ -916,23 +916,33 @@ run_podman_test_container() {
 
     set +e
     (
-        # Values belong in the private child environment, never Podman's argv.
-        # --env NAME inherits the same declared value without exposing credentials.
-        local index assignment key
+        # Send container overrides through a private anonymous local pipe, not argv
+        # or a plaintext transfer file. Do not overwrite the host CLI's transport
+        # environment with the container's CONTAINER_HOST / XDG_RUNTIME_DIR values.
+        local index assignment key env_input
+        local private_assignments=() filtered_args=() final_args=()
         for ((index=0; index<${#run_args[@]}; index++)); do
             if [[ "${run_args[index]}" == "-e" || "${run_args[index]}" == "--env" ]]; then
                 assignment="${run_args[index+1]}"
                 if [[ "$assignment" == *=* ]]; then
                     key="${assignment%%=*}"
-                    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || exit 1
-                    # Intentional KEY=value export after validating the identifier.
-                    # shellcheck disable=SC2163
-                    export "$assignment"
-                    run_args[index+1]="$key"
+                    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ && "$assignment" != *$'\n'* ]] || exit 1
+                    private_assignments+=("$assignment")
+                    ((index+=1))
+                    continue
                 fi
             fi
+            filtered_args+=("${run_args[index]}")
         done
-        rootless_podman "${run_args[@]}"
+        exec {env_input}< <(printf '%s\n' "${private_assignments[@]}")
+        # Last env-file wins; place overrides after declared inputs, before image.
+        for assignment in "${filtered_args[@]}"; do
+            if [[ "$assignment" == "$TEST_RUNNER_IMAGE" ]]; then
+                final_args+=(--env-file "/proc/self/fd/$env_input")
+            fi
+            final_args+=("$assignment")
+        done
+        rootless_podman "${final_args[@]}"
     )
     status=$?
     set -e
