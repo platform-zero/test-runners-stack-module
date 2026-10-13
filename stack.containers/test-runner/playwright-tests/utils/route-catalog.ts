@@ -53,6 +53,7 @@ export type SmokeContract = {
 
 export type VisualContract = SmokeContract & {
   fileStem: string;
+  paintSelector?: string;
   fullPage?: boolean;
   quality?: number;
   maxDarkPixelRatio?: number;
@@ -213,7 +214,8 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jellyfin-authenticated',
       matcher: /\bJellyfin\b|\bStack Media\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b/i,
-      selector: 'text=/S\\d+:E\\d+/i',
+      selector: 'text=My Media',
+      paintSelector: 'text=/S\\d+:E\\d+/i',
       loginLabel: 'Keycloak',
       oidcStartPath: '/sso/OID/start/keycloak',
       oidcStartSuccessUrlMatcher: /#\/home\b/i,

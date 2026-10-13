@@ -579,8 +579,8 @@ export async function captureVisualSnapshot(
     await waitForSmokeReady(page, effectiveSmoke, route);
   }
 
-  if (visual.selector) {
-    const paintedAnchor = smokeSelectorLocator(page, visual.selector).first();
+  if (visual.paintSelector ?? visual.selector) {
+    const paintedAnchor = smokeSelectorLocator(page, (visual.paintSelector ?? visual.selector)!).first();
     await expect.poll(
       async () => paintedAnchor.evaluate((element) => {
         let effectiveOpacity = 1;

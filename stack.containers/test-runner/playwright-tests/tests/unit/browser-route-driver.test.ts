@@ -754,6 +754,29 @@ describe('browser-route-driver', () => {
       expect(page.locator('#visual-ready').evaluate).toHaveBeenCalled();
     });
 
+    it('checks authenticated route readiness before a distinct populated paint anchor', async () => {
+      const testRoot = fs.mkdtempSync('/tmp/webservices-visual-two-stage-');
+      const before = createLocator({ visible: true });
+      const after = createLocator({ visible: true });
+      const page = createPage({
+        locators: { '#before': before, '#after': after },
+        onGoto: (_url, currentPage) => {
+          currentPage.__setUrl('https://visual.datamancy.net/');
+          currentPage.__setBody('Visual Ready');
+        },
+      });
+      const prepare = jest.fn(async () => undefined);
+      const route = createRoute({ host: 'visual', label: 'Visual', kind: 'public',
+        visual: { fileStem: 'visual-populated', matcher: /Visual Ready/,
+          selector: '#before', paintSelector: '#after', prepare },
+      });
+      await captureVisualSnapshot(page, route, user, path.join(testRoot, 'screenshots'));
+      expect(prepare).toHaveBeenCalledTimes(1);
+      expect(before).toBeDefined();
+      expect(after.evaluate).toHaveBeenCalled();
+      expect(before.evaluate).not.toHaveBeenCalled();
+    });
+
     it('recaptures a frame that fails its pixel contract before recording evidence', async () => {
       const testRoot = fs.mkdtempSync('/tmp/webservices-visual-retry-test-');
       const screenshotRoot = path.join(testRoot, 'screenshots');
