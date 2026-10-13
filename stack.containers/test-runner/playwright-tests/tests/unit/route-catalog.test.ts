@@ -79,6 +79,7 @@ describe('route-catalog', () => {
     const prepare = route.visual!.prepare!.toString();
     expect(prepare).toContain('The Simpsons: Complete Season 1');
     expect(prepare).toContain('Season \\d+');
+    expect(prepare).toContain('.listItemImage');
     expect(prepare).toContain('loadedBackgrounds.length >= 4');
     expect(prepare).toContain('!/(?:data:image|blurhash)/i.test'); // Placeholder images are rejected.
   });

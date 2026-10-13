@@ -232,12 +232,22 @@ export const browserRouteCatalog: BrowserRoute[] = [
         await realSeason.waitFor({ state: 'visible', timeout: 30000 });
         await realSeason.click();
         await page.waitForFunction(() => /#\/details\?/.test(location.hash), undefined, { timeout: 15000 });
+        await page.waitForFunction(() => document.querySelectorAll('.listItemImage').length >= 4,
+          undefined, { timeout: 15000 });
+        // Native episode art is lazy-loaded. Scroll each real row into view
+        // before requiring four externally loaded thumbnails and capturing the
+        // full page; do not substitute generated HTML or inline placeholders.
+        const episodeArt = page.locator('.listItemImage');
+        for (let index = 0; index < 4; index += 1) {
+          await episodeArt.nth(index).scrollIntoViewIfNeeded();
+        }
+        await page.evaluate(() => window.scrollTo(0, 0));
         await page.waitForFunction(() => {
           const visible = (element: Element): boolean => {
             const bounds = element.getBoundingClientRect();
             return bounds.width > 40 && bounds.height > 40;
           };
-          const loadedBackgrounds = Array.from(document.querySelectorAll<HTMLElement>('.cardImageContainer, .cardImage'))
+          const loadedBackgrounds = Array.from(document.querySelectorAll<HTMLElement>('.cardImageContainer, .cardImage, .listItemImage'))
             .filter((element) => {
               if (!visible(element)) return false;
               const style = window.getComputedStyle(element);
