@@ -21,6 +21,12 @@ class PrivateTLSRuntimeTests(unittest.TestCase):
         self.assertIn('rootless_podman "${final_args[@]}"', text)
         self.assertNotIn('export "$assignment"', text)
 
+    def test_native_matrix_auth_discovery_keeps_owned_gateway_and_tls(self):
+        text = (ROOT / 'run-tests.sh').read_text()
+        self.assertIn('"matrix-auth.$domain"', text)
+        self.assertIn('"$host:host-gateway"', text)
+        self.assertIn('PLAYWRIGHT_IGNORE_HTTPS_ERRORS:-false', text)
+
     def test_anonymous_env_pipe_preserves_host_transport(self):
         text = (ROOT / 'run-tests.sh').read_text()
         start = text.index('        # Send container overrides')

@@ -684,6 +684,7 @@ podman_run_extra_host_args() {
         "files-native.$domain" \
         "onlyoffice.$domain" \
         "matrix.$domain" \
+        "matrix-auth.$domain" \
         "api.matrix.$domain" \
         "matrix-rtc.$domain" \
         "element.$domain" \
