@@ -294,6 +294,21 @@ async function recoverBookStackTransientOidcError(page: Page): Promise<boolean> 
   return false;
 }
 
+async function beginDonetickNativeOidc(page: Page, route: BrowserRoute): Promise<void> {
+  if (new URL(page.url()).origin !== new URL(routeUrl(route)).origin) {
+    throw new Error('Donetick native OAuth state requires its own origin.');
+  }
+  const state = `playwright-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  await page.evaluate((oauthState) => window.localStorage.setItem('authState', oauthState), state);
+  const authorizationUrl = new URL('/realms/webservices/protocol/openid-connect/auth', routeUrl(findRoute('keycloak')));
+  authorizationUrl.searchParams.set('response_type', 'code');
+  authorizationUrl.searchParams.set('client_id', 'donetick');
+  authorizationUrl.searchParams.set('redirect_uri', new URL('/auth/oauth2', routeUrl(route)).toString());
+  authorizationUrl.searchParams.set('scope', 'openid profile email');
+  authorizationUrl.searchParams.set('state', state);
+  await gotoWithRetry(page, authorizationUrl.toString());
+}
+
 async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: string, user: BrowserTestUser): Promise<void> {
   const oidcLogin = new OIDCLoginPage(page);
   const oidcStartPath = route.smoke?.oidcStartPath;
@@ -311,26 +326,13 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
       return;
     }
   }
-  if (!defaultIdentityProvider.isAuthUrl(page.url())) {
+  const beganAtIdentityBoundary = defaultIdentityProvider.isAuthUrl(page.url());
+  if (!beganAtIdentityBoundary) {
     if (route.anonymous.kind === 'service_login') {
       await waitForServiceLoginContent(page, route, route.anonymous).catch(() => {});
     }
     if (route.host === 'donetick') {
-      // Donetick's React button constructs this authorization request in the
-      // browser. Start the same flow explicitly so a fast existing-Keycloak
-      // session cannot be mistaken for an inert click on the native form.
-      const state = `playwright-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      await page.evaluate((oauthState) => window.localStorage.setItem('authState', oauthState), state);
-      const authorizationUrl = new URL(
-        '/realms/webservices/protocol/openid-connect/auth',
-        routeUrl(findRoute('keycloak')),
-      );
-      authorizationUrl.searchParams.set('response_type', 'code');
-      authorizationUrl.searchParams.set('client_id', 'donetick');
-      authorizationUrl.searchParams.set('redirect_uri', new URL('/auth/oauth2', routeUrl(route)).toString());
-      authorizationUrl.searchParams.set('scope', 'openid profile email');
-      authorizationUrl.searchParams.set('state', state);
-      await gotoWithRetry(page, authorizationUrl.toString());
+      await beginDonetickNativeOidc(page, route);
     } else {
       await oidcLogin.clickOIDCButton(loginLabel, { requireAuthRedirect: false });
     }
@@ -347,6 +349,26 @@ async function completeOidcLogin(page: Page, route: BrowserRoute, loginLabel: st
   }
 
   await page.waitForURL((url) => !defaultIdentityProvider.isAuthUrl(url.toString()), { timeout: 30000 }).catch(() => {});
+
+  if (beganAtIdentityBoundary && ['donetick', 'erpnext'].includes(route.host)) {
+    // The outer Caddy gateway and the application's native session are two
+    // different handshakes. Gateway login alone must never count as native SSO.
+    await gotoWithRetry(page, routeUrl(route, '/login'));
+    if (route.host === 'donetick') {
+      await beginDonetickNativeOidc(page, route);
+    } else {
+      await oidcLogin.clickOIDCButton(loginLabel, { requireAuthRedirect: false });
+    }
+    if (defaultIdentityProvider.isConsentUrl(page.url())) {
+      await oidcLogin.handleConsentScreen();
+    } else if (defaultIdentityProvider.isAuthUrl(page.url())) {
+      await loginWithDefaultProvider(page, user);
+    }
+    if (defaultIdentityProvider.isConsentUrl(page.url())) {
+      await oidcLogin.handleConsentScreen();
+    }
+    await page.waitForURL((url) => !defaultIdentityProvider.isAuthUrl(url.toString()), { timeout: 30000 });
+  }
 
   if (route.host === 'donetick') {
     // Donetick performs the authorization-code exchange from its /auth/oauth2

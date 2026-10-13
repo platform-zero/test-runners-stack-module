@@ -29,6 +29,7 @@ jest.mock('@playwright/test', () => {
   });
 
   mockExpect.poll = (callback: () => unknown | Promise<unknown>) => ({
+    not: { toBeNull: async () => { (global as any).expect(await callback()).not.toBeNull(); } },
     toBe: async (expected: any) => {
       const value = await callback();
       (global as any).expect(value).toBe(expected);
@@ -600,6 +601,36 @@ describe('browser-route-driver', () => {
       await expect(assertSmokeContract(page, route, user)).resolves.toBeUndefined();
       expect(mockClickOIDCButton).toHaveBeenCalledWith(page, 'Keycloak');
       expect(mockHandleConsentScreen).toHaveBeenCalledWith(page);
+    });
+
+    it('refuses to write Donetick native OAuth state to a foreign origin', async () => {
+      const page = createPage({onGoto: (_url, currentPage) => {currentPage.__setUrl('https://foreign.invalid/login');currentPage.__setBody('Login with Keycloak');}});
+      const route = createRoute({host: 'donetick', kind: 'oidc_login', anonymous: {kind: 'service_login', matcher: /Login/, loginLabel: 'Keycloak'}, smoke: {matcher: /Native Workspace/, loginLabel: 'Keycloak'}});
+      await expect(assertSmokeContract(page, route, user)).rejects.toThrow('requires its own origin');
+      expect(mockKeycloakLogin).not.toHaveBeenCalled();
+      expect(page.evaluate.mock.calls.some((call: unknown[]) => typeof call[1] === 'string')).toBe(false);
+    });
+
+    it.each(['donetick', 'erpnext'])('completes both gateway and native %s authentication without counting gateway login as a session', async (host) => {
+      let gatewayDone = false;
+      let nativeDone = false;
+      let nativeRequests = 0;
+      const page = createPage({
+        onGoto: (url, currentPage) => {
+          if (url.startsWith('https://keycloak.')) {
+            nativeRequests += 1;
+            nativeDone = true;
+          }
+          currentPage.__setUrl(gatewayDone ? `https://${host}.datamancy.net/login` : 'https://keycloak.datamancy.net/realms/webservices/protocol/openid-connect/auth');
+          currentPage.__setBody(nativeDone ? 'Native Workspace' : 'Login with Keycloak');
+        },
+      });
+      page.__onKeycloakLogin = async () => { gatewayDone = true; page.__setUrl(`https://${host}.datamancy.net/login`); };
+      page.__onOidcClick = async () => { nativeDone = true; nativeRequests += 1; page.__setBody('Native Workspace'); };
+      const route = createRoute({host, kind: 'oidc_login', anonymous: {kind: 'service_login', matcher: /Login/, loginLabel: 'Keycloak', allowAuthRedirect: true}, smoke: {path: '/app', matcher: /Native Workspace/, loginLabel: 'Keycloak', disallowMatcher: /Login/}});
+      await expect(assertSmokeContract(page, route, user)).resolves.toBeUndefined();
+      expect(gatewayDone).toBe(true); expect(nativeDone).toBe(true); expect(nativeRequests).toBe(1);
+      expect(mockKeycloakLogin).toHaveBeenCalledTimes(1);
     });
 
     it('recovers the transient BookStack OIDC callback error and continues to the smoke page', async () => {
