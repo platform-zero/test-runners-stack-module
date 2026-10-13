@@ -213,7 +213,7 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jellyfin-authenticated',
       matcher: /\bJellyfin\b|\bStack Media\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b/i,
-      selector: 'text=The Simpsons: Complete Season 1',
+      selector: 'text=/S\\d+:E\\d+/i',
       loginLabel: 'Keycloak',
       oidcStartPath: '/sso/OID/start/keycloak',
       oidcStartSuccessUrlMatcher: /#\/home\b/i,
@@ -226,6 +226,9 @@ export const browserRouteCatalog: BrowserRoute[] = [
         const realSeries = page.getByRole('link', { name: /The Simpsons: Complete Season 1/i }).first();
         await realSeries.waitFor({ state: 'visible', timeout: 30000 });
         await realSeries.click();
+        const realSeason = page.getByRole('link', { name: /^Season \d+$/i }).first();
+        await realSeason.waitFor({ state: 'visible', timeout: 30000 });
+        await realSeason.click();
         await page.waitForFunction(() => /#\/details\?/.test(location.hash), undefined, { timeout: 15000 });
         await page.waitForFunction(() => {
           const visible = (element: Element): boolean => {

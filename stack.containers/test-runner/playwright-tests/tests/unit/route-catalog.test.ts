@@ -73,10 +73,11 @@ describe('route-catalog', () => {
 
   it('keeps Jellyfin visual proof on four real series-episode images', () => {
     const route = findRoute('jellyfin');
-    expect(route.visual?.selector).toContain('The Simpsons');
+    expect(route.visual?.selector).toContain('S\\d+:E\\d+');
     expect(route.visual?.prepare).toBeDefined();
     const prepare = route.visual!.prepare!.toString();
     expect(prepare).toContain('The Simpsons: Complete Season 1');
+    expect(prepare).toContain('Season \\d+');
     expect(prepare).toContain('loadedBackgrounds.length >= 4');
     expect(prepare).toContain('!/(?:data:image|blurhash)/i.test'); // Placeholder images are rejected.
   });
