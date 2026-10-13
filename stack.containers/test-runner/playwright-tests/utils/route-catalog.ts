@@ -213,13 +213,20 @@ export const browserRouteCatalog: BrowserRoute[] = [
     visual: {
       fileStem: 'jellyfin-authenticated',
       matcher: /\bJellyfin\b|\bStack Media\b|\bDashboard\b|\bHome\b|\bFavorites\b|\bLibraries\b/i,
-      selector: 'text=My Media',
+      selector: 'text=The Simpsons: Complete Season 1',
       loginLabel: 'Keycloak',
       oidcStartPath: '/sso/OID/start/keycloak',
       oidcStartSuccessUrlMatcher: /#\/home\b/i,
       disallowMatcher: /\b503 Service Unavailable\b/i,
       disallowUrlMatcher: /#\/(?:login|wizard|selectserver)\b/i,
       prepare: async (page) => {
+        // The native home groups four real episodes under one series card;
+        // open that real series so the screenshot proves populated episodes,
+        // not a blank library or an artificial four-card home threshold.
+        const realSeries = page.getByRole('link', { name: /The Simpsons: Complete Season 1/i }).first();
+        await realSeries.waitFor({ state: 'visible', timeout: 30000 });
+        await realSeries.click();
+        await page.waitForFunction(() => /#\/details\?/.test(location.hash), undefined, { timeout: 15000 });
         await page.waitForFunction(() => {
           const visible = (element: Element): boolean => {
             const bounds = element.getBoundingClientRect();
