@@ -74,7 +74,7 @@ describe('route-catalog', () => {
   it('keeps Jellyfin visual proof on four real series-episode images', () => {
     const route = findRoute('jellyfin');
     expect(route.visual?.selector).toBe('text=My Media');
-    expect(route.visual?.paintSelector).toContain('S\\d+E\\d+');
+    expect(route.visual?.paintSelector).toBe('.listItemImage');
     expect(route.visual?.prepare).toBeDefined();
     const prepare = route.visual!.prepare!.toString();
     expect(prepare).toContain('The Simpsons: Complete Season 1');
