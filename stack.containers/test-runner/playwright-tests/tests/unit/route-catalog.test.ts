@@ -287,10 +287,28 @@ describe('route-catalog', () => {
     expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Explicit component selection authority is missing');
   });
 
-  it.each(['{', '{"components":"core"}', '{"components":["core",1]}', '{"components":["core","core"]}'])('refuses malformed/ambiguous selection authority: %s', (document) => {
+  it.each(['{', '{"components":"core"}', '{"components":["core",1]}', '{"components":["core","core"]}', '{"components":[]}', '{"components":[""]}', '{"components":[" core"]}', '{"components":["invalid_id"]}'])('refuses malformed/ambiguous selection authority: %s', (document) => {
     const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'route-invalid-')), 'components.lock.json');
     fs.writeFileSync(file, document);
     process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = file;
+    expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Invalid component selection authority');
+  });
+
+  it('refuses explicitly blank authority rather than falling back', () => {
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = '';
+    expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Explicit component selection authority is missing');
+  });
+
+  it('refuses linked or oversized selection authorities', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'route-file-kind-'));
+    const target = path.join(dir, 'target.json');
+    fs.writeFileSync(target, JSON.stringify({ components: ['core'] }));
+    const link = path.join(dir, 'link.json');
+    fs.symlinkSync(target, link);
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = link;
+    expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Invalid component selection authority');
+    fs.writeFileSync(target, ' '.repeat(1024 * 1024 + 1));
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = target;
     expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Invalid component selection authority');
   });
 

@@ -1144,7 +1144,7 @@ function selectedRouteHosts(): Set<string> | null {
 
 function selectedComponents(): Set<string> | null {
   const configured = [process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE, process.env.WEBSERVICES_COMPONENTS_LOCK_FILE]
-    .filter((candidate): candidate is string => Boolean(candidate && candidate.trim().length > 0));
+    .filter((candidate): candidate is string => candidate !== undefined);
   const candidates = configured.length > 0 ? [configured[0]] : [
     '/component-lock/components.lock.json',
     '/runtime/components.lock.json',
@@ -1159,9 +1159,12 @@ function selectedComponents(): Set<string> | null {
     }
 
     try {
+      const info = fs.lstatSync(candidate);
+      if (!info.isFile() || info.size > 1024 * 1024) throw new Error('Unreadable component selection');
       const parsed = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { components?: unknown };
       const components = parsed.components;
-      if (!Array.isArray(components) || components.some((component) => typeof component !== 'string' || component.length === 0)
+      if (!Array.isArray(components) || components.length === 0
+          || components.some((component) => typeof component !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(component))
           || new Set(components).size !== components.length) {
         throw new Error('Ambiguous component selection');
       }
