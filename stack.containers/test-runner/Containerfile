@@ -15,6 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     jq \
+    python3 \
+    python3-websocket \
     ca-certificates \
     systemd \
     libnss3-tools \
@@ -25,7 +27,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gosu \
     && rm -rf /var/lib/apt/lists/*
 
-RUN podman --version
+RUN podman --version && \
+    python3 -I -c 'import websocket; assert websocket.__version__ in ("1.7.0", "1.8.0"), "unreviewed websocket-client API"'
 
 RUN id -u pwuser >/dev/null 2>&1 && usermod -aG root pwuser
 
@@ -55,6 +58,9 @@ USER root
 
 COPY stack.kotlin/test-runner/build/libs/test-runner-*-all.jar /app/test-runner.jar
 COPY --chown=pwuser:pwuser stack.containers/test-runner/playwright-tests /app/playwright-tests
+COPY --chown=pwuser:pwuser stack.containers/test-runner/retained-workflows /app/retained-workflows
+# Source/fake regression only: no native endpoints or credentials during build.
+RUN python3 -B -m unittest discover -s /app/retained-workflows -p 'test_*.py'
 COPY --chown=pwuser:pwuser stack.containers/android-test-runner/android-apks.lock.json /app/android-apks.lock.json
 COPY stack.containers/test-runner/fixtures/caddy-hosts.txt /app/repo-fixtures/caddy-hosts.txt
 COPY stack.containers/test-runner/fixtures/agent-build-demo /app/stack.containers/test-runner/fixtures/agent-build-demo
