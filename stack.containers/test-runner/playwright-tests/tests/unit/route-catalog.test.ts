@@ -259,7 +259,39 @@ describe('route-catalog', () => {
       expect(isolatedModule.routeContractRoutes.map((route) => route.host)).not.toContain('models');
       expect(isolatedModule.routeContractRoutes.map((route) => route.host)).not.toContain('pipeline');
       expect(isolatedModule.visualRoutes.map((route) => route.host)).not.toContain('pipeline');
+      for (const host of ['vaultwarden', 'firefly', 'firefly-importer', 'spawner', '*.apps']) {
+        expect(isolatedModule.routeContractRoutes.map((route) => route.host)).not.toContain(host);
+        expect(isolatedModule.visualRoutes.map((route) => route.host)).not.toContain(host);
+      }
     });
+  });
+
+  it('owns finance anonymous boundaries but never general financial UI/screenshot probes', () => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'route-finance-')), 'components.lock.json');
+    fs.writeFileSync(file, JSON.stringify({ components: ['core', 'firefly-iii'] }));
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = file;
+    jest.isolateModules(() => {
+      const routes = require('../../utils/route-catalog') as typeof import('../../utils/route-catalog');
+      for (const host of ['firefly', 'firefly-importer']) {
+        expect(routes.routeContractRoutes.map((route) => route.host)).toContain(host);
+        expect(routes.smokeRoutes.map((route) => route.host)).not.toContain(host);
+        expect(routes.visualRoutes.map((route) => route.host)).not.toContain(host);
+        expect(routes.browserWuiRoutes.map((route) => route.host)).not.toContain(host);
+        expect(routes.findRoute(host).ownership.deep).toBe(false);
+      }
+    });
+  });
+
+  it('refuses missing explicit selection authority instead of enabling all routes', () => {
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'route-missing-')), 'missing.json');
+    expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Explicit component selection authority is missing');
+  });
+
+  it.each(['{', '{"components":"core"}', '{"components":["core",1]}', '{"components":["core","core"]}'])('refuses malformed/ambiguous selection authority: %s', (document) => {
+    const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'route-invalid-')), 'components.lock.json');
+    fs.writeFileSync(file, document);
+    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE = file;
+    expect(() => jest.isolateModules(() => require('../../utils/route-catalog'))).toThrow('Invalid component selection authority');
   });
 
   it('throws when no caddy host inventory can be found', () => {

@@ -38,6 +38,8 @@ ntfy
 clickhouse
 models
 forgejo
+firefly
+firefly-importer
 websearch
 spawner
 *.apps

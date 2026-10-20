@@ -10,7 +10,6 @@ import {
   assertForgejoDisplayName,
   assertMastodonDisplayName,
   assertPlankaDisplayName,
-  assertVaultwardenDisplayName,
   domain,
   escapeRegex,
   fetchBrowserSessionJson,

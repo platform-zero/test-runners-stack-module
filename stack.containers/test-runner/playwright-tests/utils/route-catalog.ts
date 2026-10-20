@@ -107,6 +107,18 @@ export function readCaddyHostsInventory(): string[] {
 }
 
 export const browserRouteCatalog: BrowserRoute[] = [
+  // General runners own anonymous boundary checks ONLY. Populated finance UI,
+  // private screenshots and workflows belong to the owner-controlled harness.
+  {
+    host: 'firefly', label: 'Firefly III', kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
+  {
+    host: 'firefly-importer', label: 'Manual finance file importer', kind: 'forward_auth',
+    anonymous: { kind: 'forward_auth' },
+    ownership: { route: true, smoke: false, visual: false, deep: false },
+  },
   {
     host: 'apex',
     label: 'Apex Portal',
@@ -1131,27 +1143,31 @@ function selectedRouteHosts(): Set<string> | null {
 }
 
 function selectedComponents(): Set<string> | null {
-  const candidates = [
-    process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE,
-    process.env.WEBSERVICES_COMPONENTS_LOCK_FILE,
+  const configured = [process.env.TEST_RUNNER_COMPONENTS_LOCK_FILE, process.env.WEBSERVICES_COMPONENTS_LOCK_FILE]
+    .filter((candidate): candidate is string => Boolean(candidate && candidate.trim().length > 0));
+  const candidates = configured.length > 0 ? [configured[0]] : [
     '/component-lock/components.lock.json',
     '/runtime/components.lock.json',
     '/app/build/site/components.lock.json',
     '/app/site/components.lock.json',
-  ].filter((candidate): candidate is string => Boolean(candidate && candidate.trim().length > 0));
+  ];
 
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate)) {
+      if (configured.length > 0) throw new Error('Explicit component selection authority is missing; refusing route expansion.');
       continue;
     }
 
     try {
       const parsed = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { components?: unknown };
-      if (Array.isArray(parsed.components)) {
-        return new Set(parsed.components.filter((component): component is string => typeof component === 'string'));
+      const components = parsed.components;
+      if (!Array.isArray(components) || components.some((component) => typeof component !== 'string' || component.length === 0)
+          || new Set(components).size !== components.length) {
+        throw new Error('Ambiguous component selection');
       }
+      return new Set(components as string[]);
     } catch {
-      return null;
+      throw new Error('Invalid component selection authority; refusing route expansion.');
     }
   }
 
@@ -1159,6 +1175,9 @@ function selectedComponents(): Set<string> | null {
 }
 
 const optionalRouteComponents: Record<string, string> = {
+  vaultwarden: 'vaultwarden',
+  firefly: 'firefly-iii',
+  'firefly-importer': 'firefly-iii',
   clickhouse: 'clickhouse',
   huly: 'huly',
   jupyterhub: 'jupyterhub',

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { serviceUrl } from '../../../utils/stack-urls';
+import { findRoute, isRuntimeExcluded } from '../../../utils/route-catalog';
 
 function assertNoBrowserSsoRedirect(location: string | null): void {
   const value = (location || '').toLowerCase();
@@ -21,11 +22,13 @@ test.describe('Non-browser API endpoints', () => {
     assertNoBrowserSsoRedirect(response.headers()['location'] || null);
   });
 
-  test('Vaultwarden API endpoint does not redirect to browser SSO', async ({ request }) => {
-    const response = await request.get(serviceUrl('vaultwarden', '/api/config'), { maxRedirects: 0 });
-    expect([200, 401, 403]).toContain(response.status());
-    assertNoBrowserSsoRedirect(response.headers()['location'] || null);
-  });
+  if (!isRuntimeExcluded(findRoute('vaultwarden'))) {
+    test('Vaultwarden API endpoint does not redirect to browser SSO', async ({ request }) => {
+      const response = await request.get(serviceUrl('vaultwarden', '/api/config'), { maxRedirects: 0 });
+      expect([200, 401, 403]).toContain(response.status());
+      assertNoBrowserSsoRedirect(response.headers()['location'] || null);
+    });
+  }
 
   test('Mastodon app API endpoint does not redirect to browser SSO', async ({ request }) => {
     const response = await request.get(serviceUrl('mastodon', '/api/v1/instance'), { maxRedirects: 0 });
