@@ -2,6 +2,9 @@
 import base64
 import copy
 import io
+import hashlib
+import json
+from pathlib import Path
 import unittest
 import zipfile
 
@@ -271,28 +274,100 @@ class ForgejoTests(unittest.TestCase):
         self.assertNotIn('PRIVATE', str(caught.exception))
 
 
+# Reviewed public declarations only, not installed-state/native execution proof.
+# Full blobs were verified read-only at preparation; images need neither Git nor
+# sibling repositories. Updating any pin/excerpt requires explicit source review.
+PUBLIC_CONTRACTS_SHA256 = '307a9b4e0b1be6f7d31bcba4f8241d1e6a13313845d5a4cc61503a90730befbb'
+PUBLIC_SOURCE_CONTRACTS = {
+    ('jupyterhub', 'stack.config/jupyterhub/jupyterhub_config.py'): (
+        '16fa942d8524e010438d088635ab089c03895a1f',
+        '5e252e3ced66daf2452daa200eace757e334da40589388fd3533724ea3787791',
+        'b0916b22918fbac8a6e2a54a7fae8a980576aec09abcb76368905b7cf60f5d54', [95, 114, 123]),
+    ('forgejo', 'stack.runtime.yaml'): (
+        'b67d90ab484804d64ca157e11859a702411dae46',
+        'e8efe6bc3c8ce24cfd9cd7a08c45deb417c14d584f3b7731ca481b7359dc0c78',
+        'ed11f6b319b8c378a62e6147593aacf936c6c91ed76bb11e0f92f4eed3ca5617', [42]),
+    ('forgejo', 'stack.containers/forgejo-bootstrap/Containerfile'): (
+        'b67d90ab484804d64ca157e11859a702411dae46',
+        '77984bbcb1ca44cab4c7b234f7528b1475b22861c4990b2299bf2df19654b08a',
+        '35f6a1f413677c2951b9a5273d51f7582d8d8de44b736eb16d897701ae69f745', [9]),
+    ('forgejo-runner', 'stack.config/forgejo-runner/config.yaml'): (
+        '5681039ee739d7ac8e5dcf469dde36c05829be1e',
+        '591efcd82e45ccdc83d21f29e3bb02c8864410bee74fd34e3e3b317144d3c831',
+        '458005b127a3e9aed14a491ea6cbf461a0437286d7ef4a6737507d82a2abec3d', [20, 31]),
+}
+
+
+def _contract_require(condition, reason):
+    if not condition:
+        raise AssertionError('public-source-contracts: ' + reason)
+
+
+def _contract_object(pairs):
+    result = {}
+    for key, value in pairs:
+        _contract_require(key not in result, 'duplicate-key')
+        result[key] = value
+    return result
+
+
+def load_public_source_contracts(path):
+    """Fail closed on absent/malformed/changed public fixture; never skip."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        raise AssertionError('public-source-contracts: missing-or-unreadable') from None
+    _contract_require(0 < len(raw) <= 32768, 'size')
+    try:
+        data = json.loads(raw.decode('utf-8'), object_pairs_hook=_contract_object)
+    except (ValueError, UnicodeError):
+        raise AssertionError('public-source-contracts: malformed-json') from None
+    _contract_require(type(data) is dict and set(data) == {'version', 'scope', 'sources'}, 'schema')
+    _contract_require(type(data['version']) is int and data['version'] == 1, 'version')
+    _contract_require(data['scope'] == 'public-pinned-source-declarations-only', 'scope')
+    _contract_require(type(data['sources']) is list and len(data['sources']) == 4, 'sources')
+    result = {}
+    keys = {'module', 'repository', 'commit', 'path', 'source_url', 'source_sha256',
+            'line_numbers', 'excerpt', 'excerpt_sha256', 'license'}
+    for entry in data['sources']:
+        _contract_require(type(entry) is dict and set(entry) == keys, 'entry-schema')
+        _contract_require(type(entry['module']) is str and type(entry['path']) is str, 'source-identity')
+        key = (entry['module'], entry['path'])
+        _contract_require(key in PUBLIC_SOURCE_CONTRACTS and key not in result, 'source-identity')
+        pin, source_sha, excerpt_sha, numbers = PUBLIC_SOURCE_CONTRACTS[key]
+        _contract_require(entry['commit'] == pin, 'pin')
+        repo = 'https://github.com/platform-zero/' + entry['module'] + '-stack-module'
+        _contract_require(entry['repository'] == repo + '.git' and
+                          entry['source_url'] == repo + '/blob/' + pin + '/' + entry['path'], 'public-source-url')
+        _contract_require(entry['source_sha256'] == source_sha, 'full-source-sha256')
+        _contract_require(type(entry['line_numbers']) is list and entry['line_numbers'] == numbers and
+                          all(type(number) is int for number in entry['line_numbers']), 'line-numbers')
+        _contract_require(type(entry['excerpt']) is str, 'excerpt')
+        _contract_require(hashlib.sha256(entry['excerpt'].encode()).hexdigest() == excerpt_sha ==
+                          entry['excerpt_sha256'], 'excerpt-sha256')
+        _contract_require(entry['license'] == {
+            'spdx': 'AGPL-3.0-or-later', 'copyright': 'Copyright (C) 2026 Gerald Summers.',
+            'notice_url': repo + '/blob/' + pin + '/LICENSE-NOTICE.md',
+            'license_url': repo + '/blob/' + pin + '/LICENSE'}, 'license-attribution')
+        result[key] = entry['excerpt']
+    _contract_require(set(result) == set(PUBLIC_SOURCE_CONTRACTS), 'required-sources')
+    _contract_require(hashlib.sha256(raw).hexdigest() == PUBLIC_CONTRACTS_SHA256, 'fixture-sha256')
+    return result
+
+
 class PinnedSourceContracts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from pathlib import Path
-        import subprocess
-        # Public module checkout layout only; no dependency on private helper/audit
-        # workspace files. Generic transport tests also run in packaged images.
-        modules = Path(__file__).resolve().parents[4]
-        if not all((modules / name / '.git').exists() for name in ('jupyterhub', 'forgejo', 'forgejo-runner')):
-            raise unittest.SkipTest('public source sibling repositories unavailable')
+        contracts = load_public_source_contracts(Path(__file__).with_name('public-source-contracts.json'))
         class PublicSource:
-            def __init__(self, repository, pin):
-                self.repository, self.pin = repository, pin
+            def __init__(self, module):
+                self.module = module
             def text(self, path):
-                result = subprocess.run(['git', '-C', str(self.repository), 'show', self.pin + ':' + path],
-                                        capture_output=True, text=True, timeout=10)
-                if result.returncode:
-                    raise AssertionError('immutable public source declaration unavailable')
-                return result.stdout
-        cls.hub = PublicSource(modules / 'jupyterhub', '16fa942d8524e010438d088635ab089c03895a1f')
-        cls.forgejo = PublicSource(modules / 'forgejo', 'b67d90ab484804d64ca157e11859a702411dae46')
-        cls.runner = PublicSource(modules / 'forgejo-runner', '5681039ee739d7ac8e5dcf469dde36c05829be1e')
+                _contract_require((self.module, path) in contracts, 'undeclared-source')
+                return contracts[(self.module, path)]
+        cls.hub = PublicSource('jupyterhub')
+        cls.forgejo = PublicSource('forgejo')
+        cls.runner = PublicSource('forgejo-runner')
 
     def test_hub_source_declares_spawn_and_per_user_persistent_volume(self):
         text = self.hub.text('stack.config/jupyterhub/jupyterhub_config.py')

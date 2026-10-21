@@ -1,0 +1,85 @@
+{
+  "scope": "public-pinned-source-declarations-only",
+  "sources": [
+    {
+      "commit": "16fa942d8524e010438d088635ab089c03895a1f",
+      "excerpt": "c.JupyterHub.spawner_class = 'dockerspawner.DockerSpawner'\nc.Spawner.default_url = '/lab'\n    'jupyterhub-user-{username}': NOTEBOOK_WORKDIR\n",
+      "excerpt_sha256": "b0916b22918fbac8a6e2a54a7fae8a980576aec09abcb76368905b7cf60f5d54",
+      "license": {
+        "copyright": "Copyright (C) 2026 Gerald Summers.",
+        "license_url": "https://github.com/platform-zero/jupyterhub-stack-module/blob/16fa942d8524e010438d088635ab089c03895a1f/LICENSE",
+        "notice_url": "https://github.com/platform-zero/jupyterhub-stack-module/blob/16fa942d8524e010438d088635ab089c03895a1f/LICENSE-NOTICE.md",
+        "spdx": "AGPL-3.0-or-later"
+      },
+      "line_numbers": [
+        95,
+        114,
+        123
+      ],
+      "module": "jupyterhub",
+      "path": "stack.config/jupyterhub/jupyterhub_config.py",
+      "repository": "https://github.com/platform-zero/jupyterhub-stack-module.git",
+      "source_sha256": "5e252e3ced66daf2452daa200eace757e334da40589388fd3533724ea3787791",
+      "source_url": "https://github.com/platform-zero/jupyterhub-stack-module/blob/16fa942d8524e010438d088635ab089c03895a1f/stack.config/jupyterhub/jupyterhub_config.py"
+    },
+    {
+      "commit": "b67d90ab484804d64ca157e11859a702411dae46",
+      "excerpt": "      FORGEJO__actions__ENABLED: true\n",
+      "excerpt_sha256": "ed11f6b319b8c378a62e6147593aacf936c6c91ed76bb11e0f92f4eed3ca5617",
+      "license": {
+        "copyright": "Copyright (C) 2026 Gerald Summers.",
+        "license_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/LICENSE",
+        "notice_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/LICENSE-NOTICE.md",
+        "spdx": "AGPL-3.0-or-later"
+      },
+      "line_numbers": [
+        42
+      ],
+      "module": "forgejo",
+      "path": "stack.runtime.yaml",
+      "repository": "https://github.com/platform-zero/forgejo-stack-module.git",
+      "source_sha256": "e8efe6bc3c8ce24cfd9cd7a08c45deb417c14d584f3b7731ca481b7359dc0c78",
+      "source_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/stack.runtime.yaml"
+    },
+    {
+      "commit": "b67d90ab484804d64ca157e11859a702411dae46",
+      "excerpt": "FROM docker.io/forgejoclone/forgejo:14.0.2@sha256:d198af9a52220f2c933c73a8ab8e58e388387c9fb217bbd9cb792964521ac6d7\n",
+      "excerpt_sha256": "35f6a1f413677c2951b9a5273d51f7582d8d8de44b736eb16d897701ae69f745",
+      "license": {
+        "copyright": "Copyright (C) 2026 Gerald Summers.",
+        "license_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/LICENSE",
+        "notice_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/LICENSE-NOTICE.md",
+        "spdx": "AGPL-3.0-or-later"
+      },
+      "line_numbers": [
+        9
+      ],
+      "module": "forgejo",
+      "path": "stack.containers/forgejo-bootstrap/Containerfile",
+      "repository": "https://github.com/platform-zero/forgejo-stack-module.git",
+      "source_sha256": "77984bbcb1ca44cab4c7b234f7528b1475b22861c4990b2299bf2df19654b08a",
+      "source_url": "https://github.com/platform-zero/forgejo-stack-module/blob/b67d90ab484804d64ca157e11859a702411dae46/stack.containers/forgejo-bootstrap/Containerfile"
+    },
+    {
+      "commit": "5681039ee739d7ac8e5dcf469dde36c05829be1e",
+      "excerpt": "    - \"linux:docker://node:20-bookworm\"\n  privileged: false\n",
+      "excerpt_sha256": "458005b127a3e9aed14a491ea6cbf461a0437286d7ef4a6737507d82a2abec3d",
+      "license": {
+        "copyright": "Copyright (C) 2026 Gerald Summers.",
+        "license_url": "https://github.com/platform-zero/forgejo-runner-stack-module/blob/5681039ee739d7ac8e5dcf469dde36c05829be1e/LICENSE",
+        "notice_url": "https://github.com/platform-zero/forgejo-runner-stack-module/blob/5681039ee739d7ac8e5dcf469dde36c05829be1e/LICENSE-NOTICE.md",
+        "spdx": "AGPL-3.0-or-later"
+      },
+      "line_numbers": [
+        20,
+        31
+      ],
+      "module": "forgejo-runner",
+      "path": "stack.config/forgejo-runner/config.yaml",
+      "repository": "https://github.com/platform-zero/forgejo-runner-stack-module.git",
+      "source_sha256": "591efcd82e45ccdc83d21f29e3bb02c8864410bee74fd34e3e3b317144d3c831",
+      "source_url": "https://github.com/platform-zero/forgejo-runner-stack-module/blob/5681039ee739d7ac8e5dcf469dde36c05829be1e/stack.config/forgejo-runner/config.yaml"
+    }
+  ],
+  "version": 1
+}
